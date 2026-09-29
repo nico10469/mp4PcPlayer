@@ -2,11 +2,17 @@ name: Installer
 
 # Crea l'APK Android e l'installer Windows.
 # - Avvio a mano (tab Actions > Installer > Run workflow): i file finiscono negli "Artifacts" del run.
-# - Push di un tag vX.Y.Z (es. v1.0.0): in più crea una Release di GitHub con i due file da scaricare.
+#   Se scrivi una versione (es. 1.0.0) crea anche la Release vX.Y.Z con i due file da scaricare.
+# - Push di un tag vX.Y.Z (es. v1.0.0): crea la Release vX.Y.Z con i due file.
 # - Pull request: controlla che gli installer si costruiscano (file negli Artifacts, nessuna Release).
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione da pubblicare come Release (es. 1.0.0). Vuoto = solo build."
+        required: false
+        default: ""
   pull_request:
   push:
     tags: ["v*"]
@@ -24,9 +30,17 @@ jobs:
       name: ${{ steps.v.outputs.name }}
     steps:
       - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "La versione deve essere nel formato 1.2.3" >&2
+              exit 1
+            fi
+            echo "name=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
           else
             echo "name=0.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           fi
@@ -120,15 +134,25 @@ jobs:
           path: dist/mp4Player-*-windows-setup.exe
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android, windows]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+    needs: [version, android, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+      # Nomi fissi, così i link ".../releases/latest/download/..." del README puntano sempre all'ultima versione.
+      - run: |
+          mv mp4Player-*-android.apk mp4Player-android.apk
+          mv mp4Player-*-windows-setup.exe mp4Player-windows-setup.exe
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.version.outputs.name }}
+          name: mp4Player ${{ needs.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            **Windows:** scarica `mp4Player-windows-setup.exe` e aprilo. Contiene l'app e il server di download.
+            **Android:** scarica `mp4Player-android.apk` sul telefono e aprilo (consenti "Installa app sconosciute").
           files: |
-            mp4Player-*-android.apk
-            mp4Player-*-windows-setup.exe
+            mp4Player-android.apk
+            mp4Player-windows-setup.exe

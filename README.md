@@ -3,6 +3,15 @@
 Un player musicale personale in stile Apple Music, fatto per telefono e computer con un'unica app.
 La musica la scarichi tu da YouTube, resta sul tuo dispositivo e si ascolta anche offline.
 
+## ⬇️ Scarica
+
+| | |
+|---|---|
+| **Windows** | [mp4Player-windows-setup.exe](https://github.com/nico10469/mp4PcPlayer/releases/latest/download/mp4Player-windows-setup.exe): app + server di download |
+| **Android** | [mp4Player-android.apk](https://github.com/nico10469/mp4PcPlayer/releases/latest/download/mp4Player-android.apk) |
+
+Tutte le versioni sono nella pagina [Releases](https://github.com/nico10469/mp4PcPlayer/releases).
+
 | Telefono | | |
 |---|---|---|
 | ![Libreria](docs/screenshots/telefono-libreria.png) | ![In riproduzione](docs/screenshots/telefono-in-riproduzione.png) | ![Scarica](docs/screenshots/telefono-scarica.png) |
@@ -28,15 +37,16 @@ L'audio viene salvato in **m4a (AAC)**, che si riproduce ovunque, iPhone compres
 
 ## Installare (il modo semplice)
 
-Nella pagina [Releases](../../releases) trovi:
+Dai link qui sopra (o dalla pagina [Releases](https://github.com/nico10469/mp4PcPlayer/releases)) scarichi:
 
-- **`mp4Player-X.Y.Z-windows-setup.exe`**: l'installer per Windows, con l'app e, se lo lasci spuntato, anche il **server di download**. Non serve installare Python. L'installer apre la porta 8000 nel firewall solo per le reti private (casa), così il telefono raggiunge il server. Può anche avviare il server all'accensione del PC.
-- **`mp4Player-X.Y.Z-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
+- **`mp4Player-windows-setup.exe`**: l'installer per Windows, con l'app e, se lo lasci spuntato, anche il **server di download**. Non serve installare Python. L'installer apre la porta 8000 nel firewall solo per le reti private (casa), così il telefono raggiunge il server. Può anche avviare il server all'accensione del PC.
+- **`mp4Player-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
 
 Gli installer li crea la GitHub Action **Installer** (`.github/workflows/installer.yml`):
 
-- dal tab *Actions > Installer > Run workflow*: i file finiscono negli *Artifacts* del run;
-- con un tag, per esempio `git tag v1.0.0 && git push origin v1.0.0`: in più viene creata una Release con i due file.
+- **nuova versione da scaricare:** tab *Actions > Installer > Run workflow*, scrivi la versione (es. `1.0.0`) e premi *Run workflow*. Viene creata la Release `v1.0.0` con i due file, e i link qui sopra puntano subito a quella;
+- in alternativa, un tag: `git tag v1.0.0 && git push origin v1.0.0`;
+- *Run workflow* senza versione fa solo la build (file negli *Artifacts* del run).
 
 **Firma Android.** Android aggiorna un'app solo se la nuova versione è firmata con la stessa chiave. Crea la chiave una volta sola:
 
