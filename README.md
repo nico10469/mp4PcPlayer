@@ -26,16 +26,37 @@ _Le copertine negli screenshot sono segnaposto generati per la demo._
 
 L'audio viene salvato in **m4a (AAC)**, che si riproduce ovunque, iPhone compreso. Se sul server c'è `ffmpeg`, yt-dlp converte in m4a anche i video che su YouTube hanno solo audio opus.
 
+## Installare (il modo semplice)
+
+Nella pagina [Releases](../../releases) trovi:
+
+- **`mp4Player-X.Y.Z-windows-setup.exe`**: l'installer per Windows, con l'app e, se lo lasci spuntato, anche il **server di download**. Non serve installare Python. L'installer apre la porta 8000 nel firewall solo per le reti private (casa), così il telefono raggiunge il server. Può anche avviare il server all'accensione del PC.
+- **`mp4Player-X.Y.Z-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
+
+Gli installer li crea la GitHub Action **Installer** (`.github/workflows/installer.yml`):
+
+- dal tab *Actions > Installer > Run workflow*: i file finiscono negli *Artifacts* del run;
+- con un tag, per esempio `git tag v1.0.0 && git push origin v1.0.0`: in più viene creata una Release con i due file.
+
+**Firma Android.** Android aggiorna un'app solo se la nuova versione è firmata con la stessa chiave. Crea la chiave una volta sola:
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias mp4player -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.jks   # su Windows: certutil -encode release.jks out.txt
+```
+
+Poi, nel repository su GitHub, vai in *Settings > Secrets and variables > Actions* e aggiungi `ANDROID_KEYSTORE_BASE64` (il testo base64) e `ANDROID_KEYSTORE_PASSWORD` (la password). Conserva `release.jks`: se la perdi, per aggiornare dovrai disinstallare l'app. Senza questi secrets l'APK funziona lo stesso, ma ogni nuova versione va installata dopo aver disinstallato la precedente.
+
 ## 1. Avviare il server
 
-Serve Python 3.10 o più recente.
+Su Windows il server è già incluso nell'installer. Negli altri casi serve Python 3.10 o più recente.
 
 ```bash
 cd server
 python -m venv .venv
 source .venv/bin/activate          # su Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn mp4server.main:app --host 0.0.0.0 --port 8000
+python run_server.py          # mostra anche l'indirizzo da scrivere nell'app
 ```
 
 Variabili facoltative:
@@ -61,7 +82,7 @@ flutter pub get
 flutter run -d windows     # oppure macos, linux, oppure un telefono collegato
 ```
 
-Al primo avvio vai in **Impostazioni**, scrivi l'indirizzo del server (es. `http://192.168.1.10:8000`) e premi "Salva e prova la connessione".
+Al primo avvio vai in **Impostazioni**, scrivi l'indirizzo del server (es. `http://192.168.1.10:8000`) e premi "Salva e prova la connessione". Su PC l'indirizzo predefinito è già `http://127.0.0.1:8000`, cioè il server sullo stesso computer.
 
 Per creare l'app installabile:
 

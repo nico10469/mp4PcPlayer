@@ -23,7 +23,7 @@ void main() {
 
     await tester.tap(find.text('Impostazioni').last);
     await tester.pumpAndSettle();
-    expect(find.text('http://192.168.1.10:8000'), findsOneWidget);
+    expect(find.text(Settings.defaultUrl), findsOneWidget);
     dir.deleteSync(recursive: true);
   });
 }
