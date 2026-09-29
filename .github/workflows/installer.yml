@@ -3,9 +3,11 @@ name: Installer
 # Crea l'APK Android e l'installer Windows.
 # - Avvio a mano (tab Actions > Installer > Run workflow): i file finiscono negli "Artifacts" del run.
 # - Push di un tag vX.Y.Z (es. v1.0.0): in più crea una Release di GitHub con i due file da scaricare.
+# - Pull request: controlla che gli installer si costruiscano (file negli Artifacts, nessuna Release).
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     tags: ["v*"]
 
