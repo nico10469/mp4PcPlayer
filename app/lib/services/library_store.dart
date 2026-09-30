@@ -49,6 +49,15 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sostituisce i metadati di un brano già presente (stesso id), senza cambiarne la posizione.
+  Future<void> update(Track track) async {
+    final i = _tracks.indexWhere((t) => t.id == track.id);
+    if (i < 0) return;
+    _tracks[i] = track;
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> remove(Track track) async {
     _tracks.removeWhere((t) => t.id == track.id);
     for (final f in [audioFile(track), coverFile(track)]) {

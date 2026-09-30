@@ -12,7 +12,8 @@ def fake_fetch(url, out_dir: Path, on_progress):
     video_id = url.rsplit("=", 1)[-1]
     on_progress(0.5)
     (out_dir / f"{video_id}.m4a").write_bytes(b"0123456789")
-    info = {"id": video_id, "title": "Video", "track": "Chandelier", "artist": "Sia", "duration": 216, "thumbnail": "https://x/y.jpg"}
+    info = {"id": video_id, "title": "Video", "track": "Chandelier", "artist": "Sia", "duration": 216, "thumbnail": "https://x/y.jpg",
+            "genres": ["Pop"], "release_date": "20140317", "webpage_url": f"https://www.youtube.com/watch?v={video_id}"}
     return info, f"{video_id}.m4a"
 
 
@@ -40,7 +41,9 @@ def test_download_flow(client, tmp_path):
     tracks = client.get("/tracks").json()
     assert tracks == [
         {"id": "2vjPBrBU-TM", "title": "Chandelier", "artist": "Sia", "album": None, "duration": 216,
-         "thumbnail": "https://x/y.jpg", "added_at": tracks[0]["added_at"], "ext": "m4a"}
+         "thumbnail": "https://x/y.jpg", "added_at": tracks[0]["added_at"], "ext": "m4a",
+         "album_artist": None, "genre": "Pop", "year": 2014,
+         "source_url": "https://www.youtube.com/watch?v=2vjPBrBU-TM"}
     ]
 
     f = client.get("/tracks/2vjPBrBU-TM/file", headers={"Range": "bytes=2-4"})
@@ -93,3 +96,13 @@ def test_search_maps_entries(client, monkeypatch):
         {"id": "2vjPBrBU-TM", "title": "Sia - Chandelier", "artist": "SiaVEVO", "duration": 240.0,
          "thumbnail": "https://i.ytimg.com/vi/2vjPBrBU-TM/hqdefault.jpg"}
     ]
+
+
+def test_old_index_without_new_fields_loads(tmp_path):
+    (tmp_path / "abc.m4a").write_bytes(b"x")
+    old = {"abc": {"id": "abc", "title": "T", "artist": "A", "album": None, "duration": 1.0,
+                   "thumbnail": None, "filename": "abc.m4a", "added_at": 1.0}}
+    (tmp_path / "index.json").write_text(__import__("json").dumps(old), encoding="utf-8")
+    with TestClient(create_app(tmp_path, token="", fetch=fake_fetch)) as c:
+        track = c.get("/tracks/abc").json()
+    assert track["genre"] is None and track["year"] is None

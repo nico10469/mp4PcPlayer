@@ -1,119 +1,126 @@
 # mp4PcPlayer
 
-Un player musicale personale in stile Apple Music, fatto per telefono e computer con un'unica app.
-La musica la scarichi tu da YouTube, resta sul tuo dispositivo e si ascolta anche offline.
+A personal music player in the style of Apple Music, with one app for both phone and computer.
+You download the music yourself from YouTube. It stays on your device and plays offline too.
 
-## ⬇️ Scarica
+## ⬇️ Download
 
 | | |
 |---|---|
-| **Windows** | [mp4Player-windows-setup.exe](https://github.com/nico10469/mp4PcPlayer/releases/latest/download/mp4Player-windows-setup.exe): app + server di download |
+| **Windows** | [mp4Player-windows-setup.exe](https://github.com/nico10469/mp4PcPlayer/releases/latest/download/mp4Player-windows-setup.exe): app + download server |
 | **Android** | [mp4Player-android.apk](https://github.com/nico10469/mp4PcPlayer/releases/latest/download/mp4Player-android.apk) |
 
-Tutte le versioni sono nella pagina [Releases](https://github.com/nico10469/mp4PcPlayer/releases).
+Every version is on the [Releases](https://github.com/nico10469/mp4PcPlayer/releases) page.
 
-| Telefono | | |
+| Library | Now playing | Track info |
 |---|---|---|
-| ![Libreria](docs/screenshots/telefono-libreria.png) | ![In riproduzione](docs/screenshots/telefono-in-riproduzione.png) | ![Scarica](docs/screenshots/telefono-scarica.png) |
+| ![Library](docs/screenshots/phone-library.png) | ![Now playing](docs/screenshots/phone-now-playing.png) | ![Track info](docs/screenshots/phone-track-info.png) |
 
-![PC](docs/screenshots/pc-download.png)
+_The covers in the screenshots are placeholders generated for the demo. The app interface is in Italian._
 
-_Le copertine negli screenshot sono segnaposto generati per la demo._
+## Features
 
-## Come funziona
+- **Bottom bar:** the library button on the left, the song that is playing in the middle (cover, title, artist, play/pause) and search on the right.
+- **Library:** Playlists, Artists, Songs, Download and Settings. Below them are the recently added songs, your favorites and your playlists.
+- **Playlists:** you can create a playlist with its own cover image, description and songs, sort your playlists and search them. Each song has a menu with remove from playlist, delete, add to playlist, play next, show artist, favorite and track info.
+- **Artists:** every artist in your library, with their albums.
+- **Search:** it searches your library as you type. Press Enter to search YouTube too and download from the results.
+- **Player:** the full-screen player takes the dominant color of the cover. The "…" button shows the track's metadata (artist, album, genre, year, duration, format, source), which you can also edit.
+
+## How it works
 
 ```
-  App (Flutter)                          Server (Python)
-  Windows, macOS, Linux,   ── cerca ──▶  FastAPI + yt-dlp
-  Android, iPhone          ◀─ file m4a ─  scarica da YouTube
+  App (Flutter)                              Server (Python)
+  Windows, macOS, Linux,   ── search ──▶     FastAPI + yt-dlp
+  Android, iPhone          ◀─ m4a file ──    downloads from YouTube
      │
-     └─ salva il brano in locale e lo riproduce (anche offline)
+     └─ saves the song locally and plays it (offline too)
 ```
 
-- **`app/`**: l'app Flutter, un solo codice per tutte le piattaforme. Ha tre sezioni: Libreria, Scarica e Impostazioni, più il mini player e la schermata "In riproduzione". Sul telefono la barra è in basso, su PC di lato.
-- **`server/`**: un piccolo server Python che usa yt-dlp. Cerca su YouTube, scarica l'audio e lo passa all'app. Tienilo acceso su un PC, su un Raspberry Pi o su un VPS.
+- **`app/`**: the Flutter app, with one codebase for every platform.
+- **`server/`**: a small Python server that uses yt-dlp. It searches YouTube, downloads the audio with its metadata (title, artist, album, genre, year) and hands it to the app. Keep it running on a PC, a Raspberry Pi or a VPS.
 
-L'audio viene salvato in **m4a (AAC)**, che si riproduce ovunque, iPhone compreso. Se sul server c'è `ffmpeg`, yt-dlp converte in m4a anche i video che su YouTube hanno solo audio opus.
+Audio is saved as **m4a (AAC)**, which plays everywhere, iPhone included. If `ffmpeg` is installed on the server, yt-dlp also converts to m4a the videos that only have opus audio on YouTube, and writes the metadata into the file's tags.
 
-## Installare (il modo semplice)
+## Installing (the easy way)
 
-Dai link qui sopra (o dalla pagina [Releases](https://github.com/nico10469/mp4PcPlayer/releases)) scarichi:
+From the links above (or the [Releases](https://github.com/nico10469/mp4PcPlayer/releases) page) you can download:
 
-- **`mp4Player-windows-setup.exe`**: l'installer per Windows, con l'app e, se lo lasci spuntato, anche il **server di download**. Non serve installare Python. L'installer apre la porta 8000 nel firewall solo per le reti private (casa), così il telefono raggiunge il server. Può anche avviare il server all'accensione del PC.
-- **`mp4Player-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
+- **`mp4Player-windows-setup.exe`**: the Windows installer. It installs the app and, if you leave its box ticked, the **download server** too. You don't need to install Python. The installer opens port 8000 in the firewall for private (home) networks only, so your phone can reach the server. It can also start the server when the PC starts.
+- **`mp4Player-android.apk`**: the Android app. Open it on your phone and allow "Install unknown apps" when Android asks. Then go to Library > Settings and type the address that the server window shows on the PC.
 
-Gli installer li crea la GitHub Action **Installer** (`.github/workflows/installer.yml`):
+The installers are built by the **Installer** GitHub Action (`.github/workflows/installer.yml`):
 
-- **nuova versione da scaricare:** tab *Actions > Installer > Run workflow*, scrivi la versione (es. `1.0.0`) e premi *Run workflow*. Viene creata la Release `v1.0.0` con i due file, e i link qui sopra puntano subito a quella;
-- in alternativa, un tag: `git tag v1.0.0 && git push origin v1.0.0`;
-- *Run workflow* senza versione fa solo la build (file negli *Artifacts* del run).
+- **to publish a new version:** go to *Actions > Installer > Run workflow*, type the version (e.g. `1.0.0`) and press *Run workflow*. This creates the `v1.0.0` Release with both files, and the links above point to it right away;
+- alternatively, push a tag: `git tag v1.0.0 && git push origin v1.0.0`;
+- *Run workflow* without a version only builds (the files are in the run's *Artifacts*).
 
-**Firma Android.** Android aggiorna un'app solo se la nuova versione è firmata con la stessa chiave. Crea la chiave una volta sola:
+**Android signing.** Android only updates an app when the new version is signed with the same key. Create the key once:
 
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias mp4player -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 release.jks   # su Windows: certutil -encode release.jks out.txt
+base64 -w0 release.jks   # on Windows: certutil -encode release.jks out.txt
 ```
 
-Poi, nel repository su GitHub, vai in *Settings > Secrets and variables > Actions* e aggiungi `ANDROID_KEYSTORE_BASE64` (il testo base64) e `ANDROID_KEYSTORE_PASSWORD` (la password). Conserva `release.jks`: se la perdi, per aggiornare dovrai disinstallare l'app. Senza questi secrets l'APK funziona lo stesso, ma ogni nuova versione va installata dopo aver disinstallato la precedente.
+Then, in the GitHub repository, go to *Settings > Secrets and variables > Actions* and add `ANDROID_KEYSTORE_BASE64` (the base64 text) and `ANDROID_KEYSTORE_PASSWORD` (the password). Keep `release.jks` safe: if you lose it, you will have to uninstall the app to update it. Without these secrets the APK still works, but you have to uninstall the previous version before installing a new one.
 
-## 1. Avviare il server
+## 1. Starting the server
 
-Su Windows il server è già incluso nell'installer. Negli altri casi serve Python 3.10 o più recente.
+On Windows the server is already included in the installer. Everywhere else you need Python 3.10 or newer.
 
 ```bash
 cd server
 python -m venv .venv
-source .venv/bin/activate          # su Windows: .venv\Scripts\activate
+source .venv/bin/activate          # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python run_server.py          # mostra anche l'indirizzo da scrivere nell'app
+python run_server.py          # also shows the address to type in the app
 ```
 
-Variabili facoltative:
+Optional variables:
 
-| Variabile | A cosa serve | Predefinito |
+| Variable | What it does | Default |
 |---|---|---|
-| `MP4_LIBRARY` | cartella dove il server salva i file | `library` |
-| `MP4_TOKEN` | se impostata, l'app deve usare questo token | nessuno |
+| `MP4_LIBRARY` | folder where the server saves the files | `library` |
+| `MP4_TOKEN` | if set, the app must use this token | none |
 
-Se il server è raggiungibile da internet, **imposta sempre `MP4_TOKEN`**. Per usarlo fuori casa senza aprire porte sul router, la soluzione più semplice è [Tailscale](https://tailscale.com): lo installi sul server e sul telefono e usi l'indirizzo Tailscale del server.
+If the server can be reached from the internet, **always set `MP4_TOKEN`**. The simplest way to use it away from home without opening ports on your router is [Tailscale](https://tailscale.com): install it on the server and on your phone, and use the server's Tailscale address.
 
-Quando YouTube cambia qualcosa e i download smettono di funzionare, basta aggiornare yt-dlp sul server con `pip install -U yt-dlp`, senza toccare l'app.
+When YouTube changes something and downloads stop working, update yt-dlp on the server with `pip install -U yt-dlp`. The app doesn't need to change.
 
-API principali: `GET /search?q=`, `POST /downloads {"source": id o link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. La documentazione interattiva è su `http://server:8000/docs`.
+Main API: `GET /search?q=`, `POST /downloads {"source": id or link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. The interactive documentation is at `http://server:8000/docs`.
 
-## 2. Avviare l'app
+## 2. Starting the app
 
-Installa [Flutter](https://docs.flutter.dev/get-started/install), poi:
+Install [Flutter](https://docs.flutter.dev/get-started/install), then:
 
 ```bash
 cd app
 flutter pub get
-flutter run -d windows     # oppure macos, linux, oppure un telefono collegato
+flutter run -d windows     # or macos, linux, or a connected phone
 ```
 
-Al primo avvio vai in **Impostazioni**, scrivi l'indirizzo del server (es. `http://192.168.1.10:8000`) e premi "Salva e prova la connessione". Su PC l'indirizzo predefinito è già `http://127.0.0.1:8000`, cioè il server sullo stesso computer.
+On first launch go to **Library > Settings**, type the server address (e.g. `http://192.168.1.10:8000`) and press "Salva e prova la connessione" (save and test the connection). On a PC the default address is already `http://127.0.0.1:8000`, that is, the server on the same computer.
 
-Per creare l'app installabile:
+To build an installable app:
 
-| Piattaforma | Comando | Note |
+| Platform | Command | Notes |
 |---|---|---|
-| Android | `flutter build apk` | installi l'APK direttamente sul telefono |
-| Windows | `flutter build windows` | serve Visual Studio con "Sviluppo desktop C++" |
-| macOS | `flutter build macos` | serve un Mac con Xcode |
-| iPhone | `flutter build ios` | serve un Mac con Xcode, vedi sotto |
-| Linux | `flutter build linux` | servono `libgtk-3-dev` e `libmpv-dev` |
+| Android | `flutter build apk` | install the APK directly on the phone |
+| Windows | `flutter build windows` | needs Visual Studio with "Desktop development with C++" |
+| macOS | `flutter build macos` | needs a Mac with Xcode |
+| iPhone | `flutter build ios` | needs a Mac with Xcode, see below |
+| Linux | `flutter build linux` | needs `libgtk-3-dev` and `libmpv-dev` |
 
-**iPhone:** un'app che scarica da YouTube non viene accettata sull'App Store, quindi va installata in sideload. Puoi usare Xcode con il tuo Apple ID (va reinstallata ogni 7 giorni), AltStore/SideStore, oppure un account sviluppatore (99 €/anno, dura un anno).
+**iPhone:** the App Store doesn't accept an app that downloads from YouTube, so it has to be sideloaded. You can use Xcode with your Apple ID (it has to be reinstalled every 7 days), AltStore/SideStore, or a developer account (€99 a year, lasts a year).
 
-## Test
+## Tests
 
 ```bash
 cd server && pip install -r requirements-dev.txt && pytest
 cd app && flutter analyze && flutter test
 ```
 
-## Cose da sapere
+## Good to know
 
-- Scaricare da YouTube va contro i suoi termini di servizio. Il progetto è pensato per un uso personale.
-- La riproduzione in background con i controlli nella schermata di blocco non c'è ancora: è il prossimo passo (`just_audio_background` / `audio_service`).
+- Downloading from YouTube is against its terms of service. This project is meant for personal use.
+- Background playback with lock-screen controls isn't there yet. It is the next step (`just_audio_background` / `audio_service`).

@@ -6,6 +6,7 @@ import '../services/server_api.dart';
 import 'app_scope.dart';
 import 'cover.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 final _youtubeLink = RegExp(r'^https?://([a-z0-9-]+\.)*(youtube\.com|youtu\.be)/', caseSensitive: false);
 
@@ -61,10 +62,10 @@ class _DownloadPageState extends State<DownloadPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scope = AppScope.of(context);
-    return CustomScrollView(
+    return LargeTitlePage(
+      title: 'Scarica musica',
+      backLabel: 'Libreria',
       slivers: [
-        const SliverAppBar(title: Text('Scarica'), pinned: true),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -108,37 +109,50 @@ class _DownloadPageState extends State<DownloadPage> {
                 style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
-          ),
-        ListenableBuilder(
-          listenable: Listenable.merge([scope.downloads, scope.library]),
-          builder: (context, _) => SliverList.separated(
-            itemCount: _loading || _error != null ? 0 : _results.length,
+          )
+        else
+          SliverList.separated(
+            itemCount: _results.length,
             separatorBuilder: (_, _) => const Divider(height: 1, indent: 76),
-            itemBuilder: (context, i) {
-              final r = _results[i];
-              return ListTile(
-                leading: Cover(url: r.thumbnail),
-                title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  '${r.artist}  ·  ${formatDuration(r.duration)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: _DownloadButton(
-                  state: scope.downloads.stateOf(r.id),
-                  inLibrary: scope.library.contains(r.id),
-                  onPressed: () async {
-                    final track = await scope.downloads.download(r.id);
-                    if (!context.mounted) return;
-                    final err = scope.downloads.stateOf(r.id)?.error;
-                    _snack(track != null ? '"${track.title}" aggiunto alla libreria' : 'Download fallito: $err');
-                  },
-                ),
-              );
-            },
+            itemBuilder: (context, i) => YoutubeResultTile(result: _results[i]),
           ),
-        ),
       ],
+    );
+  }
+}
+
+/// Un risultato di YouTube con il pulsante per scaricarlo.
+class YoutubeResultTile extends StatelessWidget {
+  const YoutubeResultTile({super.key, required this.result});
+
+  final SearchResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final r = result;
+    return ListenableBuilder(
+      listenable: Listenable.merge([scope.downloads, scope.library]),
+      builder: (context, _) => ListTile(
+        leading: Cover(url: r.thumbnail),
+        title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text('${r.artist}  ·  ${formatDuration(r.duration)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: _DownloadButton(
+          state: scope.downloads.stateOf(r.id),
+          inLibrary: scope.library.contains(r.id),
+          onPressed: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            final track = await scope.downloads.download(r.id);
+            final err = scope.downloads.stateOf(r.id)?.error;
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(track != null ? '"${track.title}" aggiunto alla libreria' : 'Download fallito: $err'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

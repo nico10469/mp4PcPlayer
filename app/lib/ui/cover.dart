@@ -2,23 +2,47 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../models/track.dart';
+import '../services/library_store.dart';
 import 'theme.dart';
+
+/// L'immagine della copertina di un brano: la copia locale se c'è, altrimenti quella online.
+ImageProvider? coverImage(LibraryStore library, Track track) {
+  final f = library.coverFile(track);
+  if (f != null && f.existsSync()) return FileImage(f);
+  final url = track.thumbnail;
+  return url == null ? null : NetworkImage(url);
+}
 
 /// Copertina quadrata: file locale se c'è, altrimenti URL, altrimenti una nota musicale.
 class Cover extends StatelessWidget {
-  const Cover({super.key, this.file, this.url, this.size = 48, this.radius = 6});
+  const Cover({
+    super.key,
+    this.file,
+    this.url,
+    this.size = 48,
+    this.radius = 6,
+    this.placeholderIcon = Icons.music_note,
+    this.placeholderColor = AppColors.textSecondary,
+  });
+
+  /// Copertina di un brano della libreria.
+  factory Cover.track(LibraryStore library, Track track, {double size = 48, double radius = 6}) =>
+      Cover(file: library.coverFile(track), url: track.thumbnail, size: size, radius: radius);
 
   final File? file;
   final String? url;
   final double size;
   final double radius;
+  final IconData placeholderIcon;
+  final Color placeholderColor;
 
   @override
   Widget build(BuildContext context) {
     final placeholder = Container(
       color: AppColors.surfaceHigh,
       alignment: Alignment.center,
-      child: Icon(Icons.music_note, color: AppColors.textSecondary, size: size * 0.45),
+      child: Icon(placeholderIcon, color: placeholderColor, size: size * 0.45),
     );
     Widget image = placeholder;
     final f = file;

@@ -151,8 +151,8 @@ jobs:
           name: mp4Player ${{ needs.version.outputs.name }}
           target_commitish: ${{ github.sha }}
           body: |
-            **Windows:** scarica `mp4Player-windows-setup.exe` e aprilo. Contiene l'app e il server di download.
-            **Android:** scarica `mp4Player-android.apk` sul telefono e aprilo (consenti "Installa app sconosciute").
+            **Windows:** download `mp4Player-windows-setup.exe` and open it. It contains the app and the download server.
+            **Android:** download `mp4Player-android.apk` on your phone and open it (allow "Install unknown apps").
           files: |
             mp4Player-android.apk
             mp4Player-windows-setup.exe

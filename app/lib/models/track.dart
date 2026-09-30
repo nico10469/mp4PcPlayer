@@ -10,6 +10,10 @@ class Track {
     required this.fileName,
     this.coverFileName,
     required this.addedAt,
+    this.albumArtist,
+    this.genre,
+    this.year,
+    this.sourceUrl,
   });
 
   final String id;
@@ -27,6 +31,48 @@ class Track {
   final String? coverFileName;
   final DateTime addedAt;
 
+  /// Metadati aggiuntivi da yt-dlp o modificati a mano. I brani scaricati con
+  /// le versioni precedenti dell'app non li hanno.
+  final String? albumArtist;
+  final String? genre;
+  final int? year;
+
+  /// Pagina YouTube da cui è stato scaricato.
+  final String? sourceUrl;
+
+  /// Estensione del file audio (m4a, webm...).
+  String get format {
+    final dot = fileName.lastIndexOf('.');
+    return dot < 0 ? '' : fileName.substring(dot + 1);
+  }
+
+  /// Copia con i metadati modificati a mano: un testo vuoto cancella il campo.
+  Track withMetadata({
+    required String title,
+    required String artist,
+    required String album,
+    required String albumArtist,
+    required String genre,
+    required int? year,
+  }) {
+    String? orNull(String v) => v.trim().isEmpty ? null : v.trim();
+    return Track(
+      id: id,
+      title: title.trim().isEmpty ? this.title : title.trim(),
+      artist: artist.trim(),
+      album: orNull(album),
+      duration: duration,
+      thumbnail: thumbnail,
+      fileName: fileName,
+      coverFileName: coverFileName,
+      addedAt: addedAt,
+      albumArtist: orNull(albumArtist),
+      genre: orNull(genre),
+      year: year,
+      sourceUrl: sourceUrl,
+    );
+  }
+
   /// Costruisce il brano dalla risposta di `GET /tracks/{id}` del server.
   factory Track.fromServer(Map<String, dynamic> json, {required String fileName, String? coverFileName}) {
     return Track(
@@ -39,6 +85,10 @@ class Track {
       fileName: fileName,
       coverFileName: coverFileName,
       addedAt: DateTime.now(),
+      albumArtist: json['album_artist'] as String?,
+      genre: json['genre'] as String?,
+      year: (json['year'] as num?)?.toInt(),
+      sourceUrl: json['source_url'] as String?,
     );
   }
 
@@ -53,6 +103,10 @@ class Track {
       fileName: json['fileName'] as String,
       coverFileName: json['coverFileName'] as String?,
       addedAt: DateTime.fromMillisecondsSinceEpoch(json['addedAt'] as int),
+      albumArtist: json['albumArtist'] as String?,
+      genre: json['genre'] as String?,
+      year: (json['year'] as num?)?.toInt(),
+      sourceUrl: json['sourceUrl'] as String?,
     );
   }
 
@@ -66,6 +120,10 @@ class Track {
     'fileName': fileName,
     'coverFileName': coverFileName,
     'addedAt': addedAt.millisecondsSinceEpoch,
+    'albumArtist': albumArtist,
+    'genre': genre,
+    'year': year,
+    'sourceUrl': sourceUrl,
   };
 }
 

@@ -1,3 +1,3 @@
-# mp4Player (app Flutter)
+# mp4Player (Flutter app)
 
-Istruzioni nel [README principale](../README.md).
+Instructions are in the [main README](../README.md).
