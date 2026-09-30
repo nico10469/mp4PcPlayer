@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'services/download_manager.dart';
 import 'services/library_store.dart';
+import 'services/lyrics_service.dart';
 import 'services/player_controller.dart';
 import 'services/playlist_store.dart';
 import 'services/server_api.dart';
@@ -22,29 +24,46 @@ Future<void> main() async {
 
   final settings = Settings(await SharedPreferences.getInstance());
   final data = await getApplicationSupportDirectory();
-  final library = LibraryStore(Directory('${data.path}/library'));
+  final custom = settings.musicDir;
+  final library = LibraryStore(Directory('${data.path}/library'), musicDir: custom == null ? null : Directory(custom));
   await library.load();
   final playlists = PlaylistStore(library);
   await playlists.load();
 
   runApp(Mp4PlayerApp(settings: settings, library: library, playlists: playlists));
+
+  // I brani copiati a mano nella cartella della musica entrano in libreria da soli.
+  unawaited(library.importFolder().catchError((_) => 0));
 }
 
 class Mp4PlayerApp extends StatefulWidget {
-  const Mp4PlayerApp({super.key, required this.settings, required this.library, required this.playlists, this.player});
+  const Mp4PlayerApp({
+    super.key,
+    required this.settings,
+    required this.library,
+    required this.playlists,
+    this.player,
+    this.lyrics,
+  });
 
   final Settings settings;
   final LibraryStore library;
   final PlaylistStore playlists;
   final PlayerController? player;
+  final LyricsService? lyrics;
 
   @override
   State<Mp4PlayerApp> createState() => _Mp4PlayerAppState();
 }
 
 class _Mp4PlayerAppState extends State<Mp4PlayerApp> {
-  late final DownloadManager _downloads = DownloadManager(library: widget.library, api: _api());
+  late final DownloadManager _downloads = DownloadManager(
+    library: widget.library,
+    playlists: widget.playlists,
+    api: _api(),
+  );
   late final PlayerController _player = widget.player ?? PlayerController(widget.library);
+  late final LyricsService _lyrics = widget.lyrics ?? LyricsService();
 
   ServerApi _api() => ServerApi(baseUrl: widget.settings.serverUrl, token: widget.settings.token);
 
@@ -72,8 +91,9 @@ class _Mp4PlayerAppState extends State<Mp4PlayerApp> {
       playlists: widget.playlists,
       downloads: _downloads,
       player: _player,
+      lyrics: _lyrics,
       child: MaterialApp(
-        title: 'mp4Player',
+        title: 'Carrots MP4',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         home: const HomeShell(),

@@ -52,6 +52,22 @@ class PlaylistStore extends ChangeNotifier {
 
   bool isFavorite(Track t) => _favorites.contains(t.id);
 
+  /// I brani con il "mi piace", dall'ultimo aggiunto.
+  List<Track> get favoriteTracks {
+    final byId = {for (final t in library.tracks) t.id: t};
+    return [
+      for (final id in _favorites.toList().reversed)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
+  Playlist? bySource(String sourceId) {
+    for (final p in _playlists) {
+      if (p.sourceId == sourceId) return p;
+    }
+    return null;
+  }
+
   Future<void> toggleFavorite(Track t) async {
     if (!_favorites.remove(t.id)) _favorites.add(t.id);
     await _save();
@@ -78,6 +94,7 @@ class PlaylistStore extends ChangeNotifier {
     String description = '',
     List<String> trackIds = const [],
     File? cover,
+    String? sourceId,
   }) async {
     final now = DateTime.now();
     final id = 'pl${now.microsecondsSinceEpoch}';
@@ -88,6 +105,7 @@ class PlaylistStore extends ChangeNotifier {
       trackIds: trackIds,
       createdAt: now,
       updatedAt: now,
+      sourceId: sourceId,
     );
     if (cover != null) playlist = playlist.copyWith(coverFileName: await _copyCover(id, cover));
     _playlists.add(playlist);
@@ -141,8 +159,9 @@ class PlaylistStore extends ChangeNotifier {
   }
 
   void _onLibraryChanged() {
-    // I brani eliminati dalla libreria spariscono anche dalle playlist e dai preferiti.
-    final ids = {for (final t in library.tracks) t.id};
+    // I brani eliminati dalla libreria spariscono anche dalle playlist e dai preferiti
+    // (non quelli il cui file adesso non si trova: tornano quando la cartella è di nuovo raggiungibile).
+    final ids = library.knownIds;
     var changed = _favorites.length != _favorites.where(ids.contains).length;
     _favorites.retainWhere(ids.contains);
     for (var i = 0; i < _playlists.length; i++) {
@@ -156,6 +175,7 @@ class PlaylistStore extends ChangeNotifier {
           trackIds: p.trackIds.where(ids.contains).toList(),
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
+          sourceId: p.sourceId,
         );
         changed = true;
       }

@@ -13,7 +13,7 @@ from typing import Callable
 
 import yt_dlp
 
-from .library import Library, track_from_info
+from .library import Library, apply_hints, track_from_info
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
@@ -41,26 +41,6 @@ def thumbnail_for(entry: dict) -> str | None:
     return None
 
 
-def search(query: str, limit: int = 15) -> list[dict]:
-    opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
-    results = []
-    for entry in info.get("entries") or []:
-        if not entry or not entry.get("id"):
-            continue
-        results.append(
-            {
-                "id": entry["id"],
-                "title": entry.get("title") or entry["id"],
-                "artist": entry.get("channel") or entry.get("uploader") or "",
-                "duration": entry.get("duration"),
-                "thumbnail": thumbnail_for(entry),
-            }
-        )
-    return results
-
-
 @dataclass
 class Job:
     id: str
@@ -69,6 +49,8 @@ class Job:
     progress: float = 0.0
     track_id: str | None = None
     error: str | None = None
+    # Dati noti prima del download (dalla ricerca su YouTube Music): copertina quadrata, album.
+    hints: dict = field(default_factory=dict, repr=False)
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def to_json(self) -> dict:
@@ -125,9 +107,9 @@ class Downloader:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def submit(self, source: str) -> Job:
+    def submit(self, source: str, hints: dict | None = None) -> Job:
         url = normalize_source(source)
-        job = Job(id=uuid.uuid4().hex, source=url)
+        job = Job(id=uuid.uuid4().hex, source=url, hints=hints or {})
         with self._lock:
             self._jobs[job.id] = job
         self._pool.submit(self._run, job)
@@ -143,7 +125,7 @@ class Downloader:
             info, filename = self._fetch(
                 job.source, self.library.root, lambda p: job.update(progress=p)
             )
-            track = track_from_info(info, filename)
+            track = apply_hints(track_from_info(info, filename), job.hints)
             self.library.add(track)
             job.update(status="done", progress=1.0, track_id=track.id)
         except Exception as exc:  # yt-dlp solleva molti tipi diversi

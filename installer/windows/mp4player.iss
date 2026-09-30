@@ -1,11 +1,14 @@
-; Installer Windows di mp4Player (Inno Setup 6).
+; Installer Windows di Carrots MP4 (Inno Setup 6).
 ; Lo compila la GitHub Action "Installer"; a mano:  iscc /DAppVersion=1.0.0 installer\windows\mp4player.iss
 ; Si aspetta l'app in app\build\windows\x64\runner\Release e il server in dist\mp4player-server.exe.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppName "mp4Player"
+#define AppName "Carrots MP4"
+; Nome usato per regola del firewall e avvio automatico del server: resta quello delle
+; versioni precedenti, così aggiornando non si creano doppioni.
+#define ServerName "mp4Player Server"
 #define ServerPort "8000"
 #define Root "..\.."
 
@@ -27,6 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Serve l'amministratore per installare in Programmi e aprire la porta del server nel firewall.
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\mp4player.exe
+SetupIconFile={#Root}\app\windows\runner\resources\app_icon.ico
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
@@ -37,7 +41,7 @@ Name: "full"; Description: "App e server di download (consigliato)"
 Name: "app"; Description: "Solo l'app (uso un server su un altro computer)"
 
 [Components]
-Name: "app"; Description: "App mp4Player"; Types: full app; Flags: fixed
+Name: "app"; Description: "App Carrots MP4"; Types: full app; Flags: fixed
 Name: "server"; Description: "Server di download (yt-dlp): serve per scaricare i brani anche dal telefono"; Types: full
 
 [Tasks]
@@ -48,21 +52,26 @@ Name: "serverautostart"; Description: "Avvia il server di download all'accension
 Source: "{#Root}\app\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Components: app; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Root}\dist\mp4player-server.exe"; DestDir: "{app}\server"; Components: server; Flags: ignoreversion
 
+[InstallDelete]
+; Collegamenti delle versioni che si chiamavano ancora mp4Player.
+Type: files; Name: "{group}\mp4Player.lnk"
+Type: files; Name: "{autodesktop}\mp4Player.lnk"
+
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\mp4player.exe"
-Name: "{group}\{#AppName} Server"; Filename: "{app}\server\mp4player-server.exe"; Components: server
+Name: "{group}\{#ServerName}"; Filename: "{app}\server\mp4player-server.exe"; Components: server
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\mp4player.exe"; Tasks: desktopicon
-Name: "{commonstartup}\{#AppName} Server"; Filename: "{app}\server\mp4player-server.exe"; Parameters: ""; Flags: runminimized; Tasks: serverautostart
+Name: "{commonstartup}\{#ServerName}"; Filename: "{app}\server\mp4player-server.exe"; Parameters: ""; Flags: runminimized; Tasks: serverautostart
 
 [Run]
 ; Apre la porta del server solo sulle reti private (casa), così il telefono lo raggiunge.
 ; Prima cancella la regola, così reinstallando non si duplica.
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName} Server"""; Flags: runhidden; Components: server
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#AppName} Server"" dir=in action=allow protocol=TCP localport={#ServerPort} profile=private"; Flags: runhidden; Components: server
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#ServerName}"""; Flags: runhidden; Components: server
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#ServerName}"" dir=in action=allow protocol=TCP localport={#ServerPort} profile=private"; Flags: runhidden; Components: server
 Filename: "{app}\server\mp4player-server.exe"; Description: "Avvia il server di download"; Flags: nowait postinstall skipifsilent runasoriginaluser; Components: server
 Filename: "{app}\mp4player.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM mp4player-server.exe"; Flags: runhidden; RunOnceId: "StopServer"
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName} Server"""; Flags: runhidden; RunOnceId: "FirewallRule"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#ServerName}"""; Flags: runhidden; RunOnceId: "FirewallRule"

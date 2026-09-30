@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/playlist.dart';
 import '../services/playlist_store.dart';
 import 'app_scope.dart';
+import 'favorites.dart';
 import 'playlist_editor.dart';
 import 'theme.dart';
 import 'track_tile.dart';
@@ -56,7 +57,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
             ),
           ],
           slivers: [
-            if (all.isEmpty)
+            if (all.isEmpty) ...[
+              SliverToBoxAdapter(child: _favoritesRow(context)),
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyState(
@@ -65,8 +67,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                   action: 'Nuova playlist',
                   onAction: _create,
                 ),
-              )
-            else ...[
+              ),
+            ] else ...[
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -91,6 +93,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                   onTap: _create,
                 ),
               ),
+              if (q.isEmpty || 'preferiti'.contains(q)) SliverToBoxAdapter(child: _favoritesRow(context)),
               SliverList.builder(
                 itemCount: shown.length,
                 itemBuilder: (context, i) => _PlaylistRow(
@@ -107,6 +110,17 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       },
     );
   }
+}
+
+Widget _favoritesRow(BuildContext context) {
+  final count = AppScope.of(context).playlists.favoriteTracks.length;
+  return _PlaylistRow(
+    cover: const FavoritesCover(),
+    title: const Text('Preferiti', style: TextStyle(fontSize: 18)),
+    subtitle: count == 1 ? '1 brano' : '$count brani',
+    chevron: true,
+    onTap: () => openFavorites(context),
+  );
 }
 
 class _PlaylistRow extends StatelessWidget {

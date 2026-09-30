@@ -6,6 +6,7 @@ import '../services/cover_colors.dart';
 import '../services/player_controller.dart';
 import 'app_scope.dart';
 import 'cover.dart';
+import 'favorites.dart';
 import 'theme.dart';
 import 'track_info_sheet.dart';
 
@@ -288,7 +289,7 @@ class _Volume extends StatelessWidget {
   }
 }
 
-/// Casuale e ripetizione a sinistra e al centro, i tre puntini dei metadati a destra.
+/// Casuale, ripetizione e "mi piace"; a destra i tre puntini dei metadati.
 class _BottomRow extends StatelessWidget {
   const _BottomRow({required this.controller, required this.track, required this.color, required this.active});
 
@@ -332,6 +333,7 @@ class _BottomRow extends StatelessWidget {
             );
           },
         ),
+        FavoriteButton(track: track, color: active),
         IconButton(
           tooltip: 'Info brano',
           icon: Icon(Icons.more_horiz, color: active, size: 30),

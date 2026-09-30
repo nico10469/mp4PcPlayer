@@ -1,6 +1,8 @@
-# mp4PcPlayer
+<p align="center"><img src="docs/icon.png" alt="Carrots MP4" width="200"></p>
 
-A personal music player in the style of Apple Music, with one app for both phone and computer.
+# Carrots MP4
+
+A personal music player in the style of Apple Music, with one app for both phone and computer (this repository is still called mp4PcPlayer).
 You download the music yourself from YouTube. It stays on your device and plays offline too.
 
 ## ⬇️ Download
@@ -25,7 +27,12 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 - **Playlists:** you can create a playlist with its own cover image, description and songs, sort your playlists and search them. Each song has a menu with remove from playlist, delete, add to playlist, play next, show artist, favorite and track info.
 - **Artists:** every artist in your library, with their albums.
 - **Search:** it searches your library as you type. Press Enter to search YouTube too and download from the results.
-- **Player:** the full-screen player takes the dominant color of the cover. The "…" button shows the track's metadata (artist, album, genre, year, duration, format, source), which you can also edit.
+- **Player:** the full-screen player takes the dominant color of the cover. The heart adds the song to your Favorites, and the "…" button shows the track's metadata (artist, album, genre, year, duration, format, source).
+- **Edit metadata:** in the track info, "Modifica" lets you change the cover (pick any image), title, artist, album, album artist, genre, year and lyrics.
+- **Lyrics:** the track info shows the lyrics in their original language. They come from the file's tags when present, otherwise from [LRCLIB](https://lrclib.net), a free lyrics archive, and are saved with the song.
+- **Favorites:** the songs you like go in a special "Preferiti" folder with a purple heart on a lilac background, next to your playlists. The files are not duplicated.
+- **Your music folder:** in Settings you can choose the folder where your songs are saved (on Android the app asks for "All files access" first). Your existing songs are moved there with readable names (`Artist - Title.m4a`), and any audio files already in that folder (mp3, m4a, flac, ogg...) are added to the library with their tags and covers. On iPhone the songs go in the app's folder, visible in the Files app.
+- **Download:** it searches YouTube Music, so it shows the official audio tracks (just the album cover, no video) first. The Albums and Playlists tabs let you download a whole album or playlist in one tap; a downloaded playlist also becomes a playlist in the app. You can paste a YouTube or YouTube Music link to a song, an album or a playlist.
 
 ## How it works
 
@@ -38,7 +45,7 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 ```
 
 - **`app/`**: the Flutter app, with one codebase for every platform.
-- **`server/`**: a small Python server that uses yt-dlp. It searches YouTube, downloads the audio with its metadata (title, artist, album, genre, year) and hands it to the app. Keep it running on a PC, a Raspberry Pi or a VPS.
+- **`server/`**: a small Python server that uses yt-dlp and [ytmusicapi](https://github.com/sigma67/ytmusicapi). It searches YouTube Music, downloads the audio with its metadata (title, artist, album, genre, year) and hands it to the app. Keep it running on a PC, a Raspberry Pi or a VPS.
 
 Audio is saved as **m4a (AAC)**, which plays everywhere, iPhone included. If `ffmpeg` is installed on the server, yt-dlp also converts to m4a the videos that only have opus audio on YouTube, and writes the metadata into the file's tags.
 
@@ -85,9 +92,9 @@ Optional variables:
 
 If the server can be reached from the internet, **always set `MP4_TOKEN`**. The simplest way to use it away from home without opening ports on your router is [Tailscale](https://tailscale.com): install it on the server and on your phone, and use the server's Tailscale address.
 
-When YouTube changes something and downloads stop working, update yt-dlp on the server with `pip install -U yt-dlp`. The app doesn't need to change.
+When YouTube changes something and downloads or searches stop working, update the server's libraries with `pip install -U yt-dlp ytmusicapi`. The app doesn't need to change.
 
-Main API: `GET /search?q=`, `POST /downloads {"source": id or link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. The interactive documentation is at `http://server:8000/docs`.
+Main API: `GET /search?q=&kind=songs|albums|playlists`, `GET /collection?source=` (the songs of an album or playlist), `POST /downloads {"source": id or link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. The interactive documentation is at `http://server:8000/docs`.
 
 ## 2. Starting the app
 
