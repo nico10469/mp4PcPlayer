@@ -19,6 +19,11 @@ class Track:
     thumbnail: str | None
     filename: str
     added_at: float
+    # Metadati aggiuntivi (le voci salvate prima di queste versioni non li hanno).
+    album_artist: str | None = None
+    genre: str | None = None
+    year: int | None = None
+    source_url: str | None = None
 
     def to_json(self) -> dict:
         data = asdict(self)
@@ -79,6 +84,24 @@ class Library:
             return True
 
 
+def _year(info: dict) -> int | None:
+    """Anno di uscita se yt-dlp lo conosce, altrimenti quello di pubblicazione del video."""
+    if isinstance(info.get("release_year"), int):
+        return info["release_year"]
+    for key in ("release_date", "upload_date"):
+        value = info.get(key)
+        if isinstance(value, str) and len(value) >= 4 and value[:4].isdigit():
+            return int(value[:4])
+    return None
+
+
+def _genre(info: dict) -> str | None:
+    if info.get("genre"):
+        return info["genre"]
+    genres = info.get("genres") or []
+    return genres[0] if genres else None
+
+
 def track_from_info(info: dict, filename: str) -> Track:
     """Costruisce un Track dai metadati restituiti da yt-dlp."""
     return Track(
@@ -91,4 +114,8 @@ def track_from_info(info: dict, filename: str) -> Track:
         thumbnail=info.get("thumbnail"),
         filename=filename,
         added_at=time.time(),
+        album_artist=info.get("album_artist"),
+        genre=_genre(info),
+        year=_year(info),
+        source_url=info.get("webpage_url"),
     )

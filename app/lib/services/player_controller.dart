@@ -30,7 +30,13 @@ class PlayerController extends ChangeNotifier {
 
   Track? get current {
     final i = _index;
-    return i == null || i >= _queue.length ? null : _queue[i];
+    if (i == null || i >= _queue.length) return null;
+    // Rilegge il brano dalla libreria, così le modifiche ai metadati si vedono subito.
+    final id = _queue[i].id;
+    for (final t in library.tracks) {
+      if (t.id == id) return t;
+    }
+    return _queue[i];
   }
 
   bool get isPlaying => _player?.playing ?? false;
@@ -46,6 +52,15 @@ class PlayerController extends ChangeNotifier {
     ], initialIndex: start);
     if (shuffle) await player.shuffle();
     await player.play();
+  }
+
+  /// Mette [track] subito dopo il brano in riproduzione (o lo avvia, se non suona niente).
+  Future<void> playNext(Track track) async {
+    final i = _index;
+    if (i == null || _queue.isEmpty) return playQueue([track]);
+    _queue = [..._queue.take(i + 1), track, ..._queue.skip(i + 1)];
+    await player.insertAudioSource(i + 1, AudioSource.file(library.audioFile(track).path, tag: track));
+    notifyListeners();
   }
 
   Future<void> togglePlay() async {
@@ -74,6 +89,9 @@ class PlayerController extends ChangeNotifier {
       _player?.stop();
       _queue = const [];
       _index = null;
+      notifyListeners();
+    } else if (c != null) {
+      // Metadati modificati: aggiorna il player.
       notifyListeners();
     }
   }

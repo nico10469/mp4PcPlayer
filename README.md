@@ -14,9 +14,7 @@ Tutte le versioni sono nella pagina [Releases](https://github.com/nico10469/mp4P
 
 | Telefono | | |
 |---|---|---|
-| ![Libreria](docs/screenshots/telefono-libreria.png) | ![In riproduzione](docs/screenshots/telefono-in-riproduzione.png) | ![Scarica](docs/screenshots/telefono-scarica.png) |
-
-![PC](docs/screenshots/pc-download.png)
+| ![Libreria](docs/screenshots/telefono-libreria.png) | ![In riproduzione](docs/screenshots/telefono-in-riproduzione.png) | ![Info brano](docs/screenshots/telefono-metadati.png) |
 
 _Le copertine negli screenshot sono segnaposto generati per la demo._
 
@@ -30,7 +28,7 @@ _Le copertine negli screenshot sono segnaposto generati per la demo._
      └─ salva il brano in locale e lo riproduce (anche offline)
 ```
 
-- **`app/`**: l'app Flutter, un solo codice per tutte le piattaforme. Ha tre sezioni: Libreria, Scarica e Impostazioni, più il mini player e la schermata "In riproduzione". Sul telefono la barra è in basso, su PC di lato.
+- **`app/`**: l'app Flutter, un solo codice per tutte le piattaforme. In basso ci sono tre pulsanti: la Libreria a sinistra (Playlist, Artisti, Brani, Download, Impostazioni, poi gli aggiunti di recente e le playlist), il brano in riproduzione al centro e la ricerca a destra. Il player a schermo intero prende il colore della copertina e dai tre puntini mostra i metadati del brano (artista, album, genere, anno...), che si possono anche correggere.
 - **`server/`**: un piccolo server Python che usa yt-dlp. Cerca su YouTube, scarica l'audio e lo passa all'app. Tienilo acceso su un PC, su un Raspberry Pi o su un VPS.
 
 L'audio viene salvato in **m4a (AAC)**, che si riproduce ovunque, iPhone compreso. Se sul server c'è `ffmpeg`, yt-dlp converte in m4a anche i video che su YouTube hanno solo audio opus.
@@ -40,7 +38,7 @@ L'audio viene salvato in **m4a (AAC)**, che si riproduce ovunque, iPhone compres
 Dai link qui sopra (o dalla pagina [Releases](https://github.com/nico10469/mp4PcPlayer/releases)) scarichi:
 
 - **`mp4Player-windows-setup.exe`**: l'installer per Windows, con l'app e, se lo lasci spuntato, anche il **server di download**. Non serve installare Python. L'installer apre la porta 8000 nel firewall solo per le reti private (casa), così il telefono raggiunge il server. Può anche avviare il server all'accensione del PC.
-- **`mp4Player-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
+- **`mp4Player-android.apk`**: l'app per Android. Aprilo dal telefono e consenti "Installa app sconosciute" quando Android lo chiede. Poi, in Libreria > Impostazioni, scrivi l'indirizzo che la finestra del server mostra sul PC.
 
 Gli installer li crea la GitHub Action **Installer** (`.github/workflows/installer.yml`):
 
@@ -92,7 +90,7 @@ flutter pub get
 flutter run -d windows     # oppure macos, linux, oppure un telefono collegato
 ```
 
-Al primo avvio vai in **Impostazioni**, scrivi l'indirizzo del server (es. `http://192.168.1.10:8000`) e premi "Salva e prova la connessione". Su PC l'indirizzo predefinito è già `http://127.0.0.1:8000`, cioè il server sullo stesso computer.
+Al primo avvio vai in **Libreria > Impostazioni**, scrivi l'indirizzo del server (es. `http://192.168.1.10:8000`) e premi "Salva e prova la connessione". Su PC l'indirizzo predefinito è già `http://127.0.0.1:8000`, cioè il server sullo stesso computer.
 
 Per creare l'app installabile:
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/server_api.dart';
 import 'app_scope.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -61,9 +62,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
+    return LargeTitlePage(
+      title: 'Impostazioni',
+      backLabel: 'Libreria',
       slivers: [
-        const SliverAppBar(title: Text('Impostazioni'), pinned: true),
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverList.list(

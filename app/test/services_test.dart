@@ -4,8 +4,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+import 'dart:typed_data';
+
+import 'package:flutter/painting.dart';
+import 'package:mp4player/models/track.dart';
+import 'package:mp4player/services/cover_colors.dart';
 import 'package:mp4player/services/download_manager.dart';
 import 'package:mp4player/services/library_store.dart';
+import 'package:mp4player/services/playlist_store.dart';
 import 'package:mp4player/services/server_api.dart';
 
 const _id = '2vjPBrBU-TM';
@@ -48,6 +55,9 @@ MockClient fakeServer({bool failJob = false}) {
           'duration': 216.5,
           'thumbnail': 'https://img/x.jpg',
           'ext': 'm4a',
+          'genre': 'Pop',
+          'year': 2014,
+          'source_url': 'https://www.youtube.com/watch?v=$_id',
         }),
         200,
       );
@@ -100,6 +110,9 @@ void main() {
     await reloaded.load();
     expect(reloaded.tracks.single.id, _id);
     expect(reloaded.tracks.single.duration, const Duration(milliseconds: 216500));
+    expect(reloaded.tracks.single.genre, 'Pop');
+    expect(reloaded.tracks.single.year, 2014);
+    expect(reloaded.tracks.single.format, 'm4a');
 
     await reloaded.remove(reloaded.tracks.single);
     expect(reloaded.tracks, isEmpty);
@@ -123,5 +136,79 @@ void main() {
   test('401 becomes a clear message', () async {
     final api = ServerApi(baseUrl: 'http://srv', client: MockClient((_) async => http.Response('{}', 401)));
     expect(api.health(), throwsA(isA<ServerException>().having((e) => e.message, 'message', 'Token errato')));
+  });
+
+  Future<Track> addTrack(LibraryStore library, String id, {String artist = 'Sia'}) async {
+    await File('${dir.path}/$id.m4a').writeAsBytes([1]);
+    final t = Track(id: id, title: 'T$id', artist: artist, fileName: '$id.m4a', addedAt: DateTime.now());
+    await library.add(t);
+    return t;
+  }
+
+  test('playlists and favorites are saved and follow the library', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final a = await addTrack(library, 'a');
+    final b = await addTrack(library, 'b');
+    final store = PlaylistStore(library);
+    await store.load();
+
+    var p = await store.create(name: '  Estate ', description: 'mare', trackIds: ['a']);
+    await store.addTracks(p, ['a', 'b']);
+    p = store.byId(p.id)!;
+    expect(p.name, 'Estate');
+    expect(p.trackIds, ['a', 'b']);
+    await store.toggleFavorite(b);
+    expect(store.isFavorite(b), isTrue);
+
+    store.dispose();
+    final reloaded = PlaylistStore(library);
+    await reloaded.load();
+    expect(reloaded.playlists.single.description, 'mare');
+    expect(reloaded.tracksOf(reloaded.playlists.single).map((t) => t.id), ['a', 'b']);
+    expect(reloaded.isFavorite(b), isTrue);
+
+    // Eliminare un brano dalla libreria lo toglie anche da playlist e preferiti.
+    await library.remove(b);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(reloaded.playlists.single.trackIds, ['a']);
+    expect(reloaded.isFavorite(b), isFalse);
+
+    await reloaded.removeTrack(reloaded.playlists.single, a.id);
+    expect(reloaded.playlists.single.trackIds, isEmpty);
+    await reloaded.delete(reloaded.playlists.single);
+    expect(reloaded.playlists, isEmpty);
+  });
+
+  test('edited metadata replaces the track in place', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final t = await addTrack(library, 'a');
+    await library.update(
+      t.withMetadata(title: 'Nuovo', artist: 'Sia', album: 'This Is Acting', albumArtist: '', genre: 'Pop', year: 2016),
+    );
+    final reloaded = LibraryStore(dir);
+    await reloaded.load();
+    final edited = reloaded.tracks.single;
+    expect(
+      [edited.title, edited.album, edited.albumArtist, edited.genre, edited.year],
+      ['Nuovo', 'This Is Acting', null, 'Pop', 2016],
+    );
+  });
+
+  test('dominant color prefers the saturated area over dark pixels', () {
+    // 60% quasi nero, 40% rosso: vince il rosso.
+    final pixels = BytesBuilder();
+    for (var i = 0; i < 60; i++) {
+      pixels.add([5, 5, 5, 255]);
+    }
+    for (var i = 0; i < 40; i++) {
+      pixels.add([200, 30, 40, 255]);
+    }
+    final color = dominantColor(pixels.toBytes())!;
+    expect(color, const Color.fromARGB(255, 200, 30, 40));
+    expect(foregroundFor(color), const Color(0xFFFFFFFF));
+    expect(foregroundFor(const Color(0xFFF5E6A0)), const Color(0xFF000000));
+    expect(dominantColor(Uint8List(0)), isNull);
   });
 }

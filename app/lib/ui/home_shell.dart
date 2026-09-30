@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import 'download_page.dart';
+import 'bottom_bar.dart';
 import 'library_page.dart';
-import 'player_views.dart';
-import 'settings_page.dart';
+import 'search_page.dart';
 
-/// Struttura principale: barra in basso sul telefono, barra laterale su PC e tablet.
+/// Struttura principale: due sezioni (libreria e ricerca), ognuna con la sua pila di pagine,
+/// e la barra in basso sempre visibile sopra di esse.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -15,68 +16,61 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
+  final _navigators = [GlobalKey<NavigatorState>(), GlobalKey<NavigatorState>()];
 
-  static const _destinations = [
-    (icon: Icons.library_music_outlined, selected: Icons.library_music, label: 'Libreria'),
-    (icon: Icons.download_outlined, selected: Icons.download, label: 'Scarica'),
-    (icon: Icons.settings_outlined, selected: Icons.settings, label: 'Impostazioni'),
-  ];
+  void _select(int tab) {
+    if (tab == _tab) {
+      // Ritoccare la sezione aperta torna alla sua prima pagina.
+      _navigators[tab].currentState?.popUntil((r) => r.isFirst);
+    } else {
+      setState(() => _tab = tab);
+    }
+  }
 
-  void _select(int i) => setState(() => _tab = i);
+  void _back() {
+    final nav = _navigators[_tab].currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+    } else if (_tab != 0) {
+      setState(() => _tab = 0);
+    } else {
+      SystemNavigator.pop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pages = [LibraryPage(onGoToDownload: () => _select(1)), const DownloadPage(), const SettingsPage()];
-    final body = IndexedStack(index: _tab, children: pages);
-    final wide = MediaQuery.sizeOf(context).width >= 800;
-
-    if (wide) {
-      return Scaffold(
-        body: Column(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: Scaffold(
+        extendBody: true,
+        body: IndexedStack(
+          index: _tab,
           children: [
-            Expanded(
-              child: Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: _tab,
-                    onDestinationSelected: _select,
-                    labelType: NavigationRailLabelType.all,
-                    destinations: [
-                      for (final d in _destinations)
-                        NavigationRailDestination(
-                          icon: Icon(d.icon),
-                          selectedIcon: Icon(d.selected),
-                          label: Text(d.label),
-                        ),
-                    ],
-                  ),
-                  Expanded(child: body),
-                ],
-              ),
-            ),
-            const MiniPlayer(),
+            _TabNavigator(navigatorKey: _navigators[0], root: const LibraryPage()),
+            _TabNavigator(navigatorKey: _navigators[1], root: const SearchPage()),
           ],
         ),
-      );
-    }
-
-    return Scaffold(
-      body: SafeArea(bottom: false, child: body),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const MiniPlayer(),
-          NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: _select,
-            height: 64,
-            destinations: [
-              for (final d in _destinations)
-                NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selected), label: d.label),
-            ],
-          ),
-        ],
+        bottomNavigationBar: BottomBar(tab: _tab, onLibrary: () => _select(0), onSearch: () => _select(1)),
       ),
+    );
+  }
+}
+
+class _TabNavigator extends StatelessWidget {
+  const _TabNavigator({required this.navigatorKey, required this.root});
+
+  final GlobalKey<NavigatorState> navigatorKey;
+  final Widget root;
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      key: navigatorKey,
+      onGenerateRoute: (settings) => MaterialPageRoute<void>(settings: settings, builder: (_) => root),
     );
   }
 }

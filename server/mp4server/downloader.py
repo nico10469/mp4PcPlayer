@@ -106,7 +106,11 @@ def default_fetch(url: str, out_dir: Path, on_progress: Callable[[float], None])
     }
     if shutil.which("ffmpeg"):
         # Con ffmpeg si converte comunque in m4a, anche quando YouTube offre solo opus/webm.
-        opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}]
+        # FFmpegMetadata scrive titolo, artista, album, anno ecc. anche nei tag del file.
+        opts["postprocessors"] = [
+            {"key": "FFmpegExtractAudio", "preferredcodec": "m4a"},
+            {"key": "FFmpegMetadata", "add_metadata": True},
+        ]
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
     path = Path(info["requested_downloads"][0]["filepath"])

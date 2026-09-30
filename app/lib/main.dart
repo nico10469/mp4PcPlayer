@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/download_manager.dart';
 import 'services/library_store.dart';
 import 'services/player_controller.dart';
+import 'services/playlist_store.dart';
 import 'services/server_api.dart';
 import 'services/settings.dart';
 import 'ui/app_scope.dart';
@@ -23,15 +24,18 @@ Future<void> main() async {
   final data = await getApplicationSupportDirectory();
   final library = LibraryStore(Directory('${data.path}/library'));
   await library.load();
+  final playlists = PlaylistStore(library);
+  await playlists.load();
 
-  runApp(Mp4PlayerApp(settings: settings, library: library));
+  runApp(Mp4PlayerApp(settings: settings, library: library, playlists: playlists));
 }
 
 class Mp4PlayerApp extends StatefulWidget {
-  const Mp4PlayerApp({super.key, required this.settings, required this.library, this.player});
+  const Mp4PlayerApp({super.key, required this.settings, required this.library, required this.playlists, this.player});
 
   final Settings settings;
   final LibraryStore library;
+  final PlaylistStore playlists;
   final PlayerController? player;
 
   @override
@@ -65,6 +69,7 @@ class _Mp4PlayerAppState extends State<Mp4PlayerApp> {
     return AppScope(
       settings: widget.settings,
       library: widget.library,
+      playlists: widget.playlists,
       downloads: _downloads,
       player: _player,
       child: MaterialApp(
