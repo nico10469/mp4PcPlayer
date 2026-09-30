@@ -16,6 +16,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from . import downloader as dl
+from . import music
 from .library import Library
 
 MEDIA_TYPES = {"m4a": "audio/mp4", "mp4": "audio/mp4", "webm": "audio/webm", "opus": "audio/ogg", "mp3": "audio/mpeg"}
@@ -23,9 +24,17 @@ MEDIA_TYPES = {"m4a": "audio/mp4", "mp4": "audio/mp4", "webm": "audio/webm", "op
 
 class DownloadRequest(BaseModel):
     source: str
+    # Facoltativi, dalla ricerca su YouTube Music: copertina quadrata e album.
+    cover: str | None = None
+    album: str | None = None
+    album_artist: str | None = None
+
+    def hints(self) -> dict:
+        cover = self.cover if self.cover and self.cover.startswith("https://") else None
+        return {"cover": cover, "album": self.album, "album_artist": self.album_artist}
 
 
-def create_app(library_dir: Path | None = None, token: str | None = None, fetch=None) -> FastAPI:
+def create_app(library_dir: Path | None = None, token: str | None = None, fetch=None, music_client=None) -> FastAPI:
     library = Library(library_dir or Path(os.environ.get("MP4_LIBRARY", "library")))
     downloader = dl.Downloader(library, fetch=fetch or dl.default_fetch)
     token = token if token is not None else os.environ.get("MP4_TOKEN")
@@ -49,16 +58,33 @@ def create_app(library_dir: Path | None = None, token: str | None = None, fetch=
         return {"ok": True, "yt_dlp": dl.yt_dlp.version.__version__}
 
     @app.get("/search")
-    async def search(q: str = Query(min_length=1), limit: int = Query(15, ge=1, le=50)) -> list[dict]:
+    async def search(
+        q: str = Query(min_length=1),
+        kind: str = Query("songs", pattern="^(songs|albums|playlists)$"),
+        limit: int = Query(20, ge=1, le=50),
+    ) -> list[dict]:
+        """Brani (le art track di YouTube Music, con la sola copertina), album o playlist."""
         try:
-            return await run_in_threadpool(dl.search, q, limit)
+            return await run_in_threadpool(music.search, q, kind, limit, music_client)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Ricerca fallita: {exc}")
+
+    @app.get("/collection")
+    async def collection(source: str = Query(min_length=1)) -> dict:
+        """I brani di un album o di una playlist (id, oppure link YouTube / YouTube Music)."""
+        try:
+            music.collection_id(source)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        try:
+            return await run_in_threadpool(music.collection, source, music_client)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Album o playlist non disponibile: {exc}")
 
     @app.post("/downloads", status_code=202)
     def start_download(req: DownloadRequest) -> dict:
         try:
-            job = downloader.submit(req.source)
+            job = downloader.submit(req.source, req.hints())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         return job.to_json()

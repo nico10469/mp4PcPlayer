@@ -14,6 +14,7 @@ class Track {
     this.genre,
     this.year,
     this.sourceUrl,
+    this.lyrics,
   });
 
   final String id;
@@ -40,6 +41,10 @@ class Track {
   /// Pagina YouTube da cui è stato scaricato.
   final String? sourceUrl;
 
+  /// Testo del brano in lingua originale (dai tag del file, da LRCLIB o scritto a mano).
+  /// Una stringa vuota vuol dire che è stato cercato ma non c'è.
+  final String? lyrics;
+
   /// Estensione del file audio (m4a, webm...).
   String get format {
     final dot = fileName.lastIndexOf('.');
@@ -54,6 +59,7 @@ class Track {
     required String albumArtist,
     required String genre,
     required int? year,
+    String? lyrics,
   }) {
     String? orNull(String v) => v.trim().isEmpty ? null : v.trim();
     return Track(
@@ -70,6 +76,26 @@ class Track {
       genre: orNull(genre),
       year: year,
       sourceUrl: sourceUrl,
+      lyrics: lyrics == null ? this.lyrics : (lyrics.trim().isEmpty ? null : lyrics.trim()),
+    );
+  }
+
+  Track copyWith({String? fileName, String? coverFileName, String? lyrics, String? album, String? albumArtist}) {
+    return Track(
+      id: id,
+      title: title,
+      artist: artist,
+      album: album ?? this.album,
+      duration: duration,
+      thumbnail: thumbnail,
+      fileName: fileName ?? this.fileName,
+      coverFileName: coverFileName ?? this.coverFileName,
+      addedAt: addedAt,
+      albumArtist: albumArtist ?? this.albumArtist,
+      genre: genre,
+      year: year,
+      sourceUrl: sourceUrl,
+      lyrics: lyrics ?? this.lyrics,
     );
   }
 
@@ -107,6 +133,7 @@ class Track {
       genre: json['genre'] as String?,
       year: (json['year'] as num?)?.toInt(),
       sourceUrl: json['sourceUrl'] as String?,
+      lyrics: json['lyrics'] as String?,
     );
   }
 
@@ -124,25 +151,83 @@ class Track {
     'genre': genre,
     'year': year,
     'sourceUrl': sourceUrl,
+    'lyrics': lyrics,
   };
 }
 
-/// Un risultato della ricerca su YouTube, non ancora scaricato.
-class SearchResult {
-  const SearchResult({required this.id, required this.title, required this.artist, this.duration, this.thumbnail});
+enum ResultKind { song, album, playlist }
 
+/// Un risultato della ricerca su YouTube Music, non ancora scaricato: un brano, un album o una playlist.
+class SearchResult {
+  const SearchResult({
+    required this.id,
+    required this.title,
+    required this.artist,
+    this.kind = ResultKind.song,
+    this.album,
+    this.duration,
+    this.thumbnail,
+    this.year,
+    this.count,
+    this.type,
+  });
+
+  /// Id del video per i brani, id dell'album (MPREb_...) o della playlist per gli altri.
   final String id;
   final String title;
   final String artist;
+  final ResultKind kind;
+  final String? album;
   final Duration? duration;
   final String? thumbnail;
+  final int? year;
+
+  /// Numero di brani (solo playlist) e tipo di uscita (Album, Singolo, EP).
+  final int? count;
+  final String? type;
 
   factory SearchResult.fromJson(Map<String, dynamic> json) => SearchResult(
     id: json['id'] as String,
     title: json['title'] as String,
     artist: json['artist'] as String? ?? '',
+    kind: ResultKind.values.firstWhere((k) => k.name == json['kind'], orElse: () => ResultKind.song),
+    album: json['album'] as String?,
     duration: _seconds(json['duration']),
     thumbnail: json['thumbnail'] as String?,
+    year: (json['year'] as num?)?.toInt(),
+    count: (json['count'] as num?)?.toInt(),
+    type: json['type'] as String?,
+  );
+}
+
+/// Un album o una playlist di YouTube con i suoi brani.
+class Collection {
+  const Collection({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.artist,
+    this.thumbnail,
+    this.year,
+    this.tracks = const [],
+  });
+
+  final String id;
+  final ResultKind kind;
+  final String title;
+  final String artist;
+  final String? thumbnail;
+  final int? year;
+  final List<SearchResult> tracks;
+
+  factory Collection.fromJson(Map<String, dynamic> json) => Collection(
+    id: json['id'] as String,
+    kind: json['kind'] == 'album' ? ResultKind.album : ResultKind.playlist,
+    title: json['title'] as String? ?? '',
+    artist: json['artist'] as String? ?? '',
+    thumbnail: json['thumbnail'] as String?,
+    year: (json['year'] as num?)?.toInt(),
+    tracks: [for (final t in json['tracks'] as List? ?? const []) SearchResult.fromJson(t as Map<String, dynamic>)],
   );
 }
 

@@ -8,6 +8,7 @@ class Playlist {
     this.trackIds = const [],
     required this.createdAt,
     required this.updatedAt,
+    this.sourceId,
   });
 
   final String id;
@@ -20,6 +21,9 @@ class Playlist {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Id della playlist di YouTube da cui è stata scaricata, per aggiornarla invece di duplicarla.
+  final String? sourceId;
+
   Playlist copyWith({String? name, String? description, String? coverFileName, List<String>? trackIds}) {
     return Playlist(
       id: id,
@@ -29,6 +33,7 @@ class Playlist {
       trackIds: trackIds ?? this.trackIds,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      sourceId: sourceId,
     );
   }
 
@@ -40,6 +45,7 @@ class Playlist {
     trackIds: [for (final id in json['trackIds'] as List? ?? const []) id as String],
     createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int),
     updatedAt: DateTime.fromMillisecondsSinceEpoch(json['updatedAt'] as int),
+    sourceId: json['sourceId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -50,5 +56,6 @@ class Playlist {
     'trackIds': trackIds,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'updatedAt': updatedAt.millisecondsSinceEpoch,
+    if (sourceId != null) 'sourceId': sourceId,
   };
 }

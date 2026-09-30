@@ -12,6 +12,7 @@ import 'package:mp4player/models/track.dart';
 import 'package:mp4player/services/cover_colors.dart';
 import 'package:mp4player/services/download_manager.dart';
 import 'package:mp4player/services/library_store.dart';
+import 'package:mp4player/services/lyrics_service.dart';
 import 'package:mp4player/services/playlist_store.dart';
 import 'package:mp4player/services/server_api.dart';
 
@@ -66,6 +67,7 @@ MockClient fakeServer({bool failJob = false}) {
     if (req.url.host == 'img') return http.Response.bytes([1, 2, 3], 200);
     if (path == '/search') {
       expect(req.url.queryParameters['q'], 'sia');
+      expect(req.url.queryParameters['kind'], 'songs');
       expect(req.headers['Authorization'], 'Bearer t0k');
       return http.Response(
         jsonEncode([
@@ -89,6 +91,7 @@ void main() {
     final results = await api.search('sia');
     expect(results.single.title, 'Sia - Chandelier');
     expect(results.single.duration, const Duration(seconds: 240));
+    expect(results.single.kind, ResultKind.song);
   });
 
   test('download saves audio and cover, then survives a reload', () async {
@@ -113,6 +116,8 @@ void main() {
     expect(reloaded.tracks.single.genre, 'Pop');
     expect(reloaded.tracks.single.year, 2014);
     expect(reloaded.tracks.single.format, 'm4a');
+    // Nella cartella della musica il file ha un nome leggibile.
+    expect(reloaded.tracks.single.fileName, 'Sia - Chandelier.m4a');
 
     await reloaded.remove(reloaded.tracks.single);
     expect(reloaded.tracks, isEmpty);
@@ -194,6 +199,202 @@ void main() {
       [edited.title, edited.album, edited.albumArtist, edited.genre, edited.year],
       ['Nuovo', 'This Is Acting', null, 'Pop', 2016],
     );
+  });
+
+  test('favorites come newest first and a new folder receives the songs', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final a = await addTrack(library, 'a');
+    final b = await addTrack(library, 'b', artist: 'Måneskin');
+    final store = PlaylistStore(library);
+    await store.load();
+    await store.toggleFavorite(a);
+    await store.toggleFavorite(b);
+    expect(store.favoriteTracks.map((t) => t.id), ['b', 'a']);
+
+    final music = Directory('${dir.path}/Musica');
+    await music.create();
+    // Un file messo a mano nella cartella, senza tag: titolo e artista dal nome.
+    await File('${music.path}/Coldplay - Yellow.mp3').writeAsBytes([0, 0, 0]);
+    await File('${music.path}/note.txt').writeAsString('non è musica');
+
+    expect(await library.moveTo(music), 2);
+    expect(library.musicDir.path, music.path);
+    expect(library.usesCustomFolder, isTrue);
+    expect(await File('${music.path}/Sia - Ta.m4a').exists(), isTrue);
+    expect(await File('${music.path}/Måneskin - Tb.m4a').exists(), isTrue);
+    expect(await File('${dir.path}/a.m4a').exists(), isFalse);
+
+    expect(await library.importFolder(), 1);
+    final yellow = library.tracks.firstWhere((t) => t.title == 'Yellow');
+    expect(yellow.artist, 'Coldplay');
+    expect(await library.importFolder(), 0);
+
+    // Riaprendo l'app con la stessa cartella tutto è ancora lì, preferiti compresi.
+    final reloaded = LibraryStore(dir, musicDir: music);
+    await reloaded.load();
+    expect(reloaded.tracks.map((t) => t.title).toSet(), {'Ta', 'Tb', 'Yellow'});
+    final favorites = PlaylistStore(reloaded);
+    await favorites.load();
+    expect(favorites.favoriteTracks.length, 2);
+  });
+
+  test('songs whose file is unreachable stay in the index', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    await addTrack(library, 'a');
+    await addTrack(library, 'b');
+    final store = PlaylistStore(library);
+    await store.load();
+    await store.create(name: 'Estate', trackIds: ['a', 'b']);
+
+    await File('${dir.path}/a.m4a').delete();
+    final reloaded = LibraryStore(dir);
+    await reloaded.load();
+    expect(reloaded.tracks.map((t) => t.id), ['b']);
+    expect(reloaded.knownIds, {'a', 'b'});
+    await reloaded.update(reloaded.tracks.single.copyWith(lyrics: 'la la'));
+
+    // Il file torna: il brano ricompare, ancora nella playlist.
+    await File('${dir.path}/a.m4a').writeAsBytes([1]);
+    final again = LibraryStore(dir);
+    await again.load();
+    expect(again.tracks.map((t) => t.id).toSet(), {'a', 'b'});
+    final playlists = PlaylistStore(again);
+    await playlists.load();
+    expect(playlists.playlists.single.trackIds, ['a', 'b']);
+    expect(again.byId('b')!.lyrics, 'la la');
+  });
+
+  test('a new cover replaces the old one', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final t = await addTrack(library, 'a');
+    final png = File('${dir.path}/../scelta_${DateTime.now().microsecondsSinceEpoch}.png');
+    await png.writeAsBytes([9, 9]);
+    await library.setCover(t, png);
+    final first = library.coverFile(library.tracks.single)!;
+    expect(first.path, endsWith('.png'));
+    expect(await first.readAsBytes(), [9, 9]);
+    await library.setCover(library.tracks.single, png);
+    expect(await first.exists(), isFalse);
+    await png.delete();
+  });
+
+  test('downloading a playlist saves the songs and a playlist, once', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final playlists = PlaylistStore(library);
+    await playlists.load();
+    final bodies = <Map<String, dynamic>>[];
+    final client = MockClient((req) async {
+      final path = req.url.path;
+      if (path == '/collection') {
+        expect(req.url.queryParameters['source'], 'PL1234567890');
+        return http.Response(
+          jsonEncode({
+            'kind': 'playlist',
+            'id': 'PL1234567890',
+            'title': 'Pop hits',
+            'artist': 'YouTube Music',
+            'thumbnail': 'https://img/pl.jpg',
+            'tracks': [
+              {'kind': 'song', 'id': _id, 'title': 'Chandelier', 'artist': 'Sia', 'thumbnail': 'https://img/sq.jpg'},
+            ],
+          }),
+          200,
+        );
+      }
+      if (path == '/downloads') {
+        bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response(jsonEncode({'id': 'job1', 'status': 'done', 'progress': 1, 'track_id': _id}), 202);
+      }
+      if (path == '/tracks/$_id') {
+        return http.Response(
+          jsonEncode({
+            'id': _id,
+            'title': 'Chandelier',
+            'artist': 'Sia',
+            'thumbnail': 'https://img/sq.jpg',
+            'ext': 'm4a',
+          }),
+          200,
+        );
+      }
+      if (path == '/tracks/$_id/file') return http.Response.bytes([1, 2], 200);
+      if (req.url.host == 'img') return http.Response.bytes([3], 200);
+      return http.Response('{}', 404);
+    });
+    final manager = DownloadManager(
+      library: library,
+      playlists: playlists,
+      api: ServerApi(baseUrl: 'http://srv', client: client),
+      pollInterval: Duration.zero,
+    );
+    final collection = await manager.api.collection('PL1234567890');
+    expect(collection.kind, ResultKind.playlist);
+    await manager.downloadCollection(collection);
+    expect(bodies.single['cover'], 'https://img/sq.jpg');
+    expect(library.tracks.single.id, _id);
+    final saved = playlists.playlists.single;
+    expect(
+      [saved.name, saved.sourceId, saved.trackIds],
+      [
+        'Pop hits',
+        'PL1234567890',
+        [_id],
+      ],
+    );
+    expect(playlists.coverFile(saved), isNotNull);
+    final progress = manager.collectionState('PL1234567890')!;
+    expect([progress.done, progress.failed, progress.running], [1, 0, false]);
+
+    // La seconda volta non si riscarica niente e non nasce una playlist doppia.
+    await manager.downloadCollection(collection);
+    expect(bodies.length, 1);
+    expect(playlists.playlists.length, 1);
+  });
+
+  test('lyrics come from LRCLIB, synced ones lose their timestamps', () async {
+    final seen = <String>[];
+    final service = LyricsService(
+      client: MockClient((req) async {
+        seen.add(req.url.path);
+        expect(req.headers['User-Agent'], contains('Carrots MP4'));
+        if (req.url.path == '/api/get') {
+          expect(req.url.queryParameters, {
+            'track_name': 'Chandelier',
+            'artist_name': 'Sia',
+            'album_name': '1000 Forms of Fear',
+            'duration': '216',
+          });
+          return http.Response('{"code":404}', 404);
+        }
+        return http.Response(
+          jsonEncode([
+            {
+              'plainLyrics': null,
+              'syncedLyrics': '[00:01.00] Party girls don\'t get hurt\n[00:04.50] Can\'t feel anything',
+            },
+          ]),
+          200,
+        );
+      }),
+    );
+    final t = Track(
+      id: 'a',
+      title: 'Chandelier (Official Video)',
+      artist: 'Sia, Diplo',
+      album: '1000 Forms of Fear',
+      duration: const Duration(seconds: 216),
+      fileName: 'a.m4a',
+      addedAt: DateTime(2026),
+    );
+    expect(await service.find(t), "Party girls don't get hurt\nCan't feel anything");
+    expect(seen, ['/api/get', '/api/search']);
+
+    final instrumental = LyricsService(client: MockClient((_) async => http.Response('{"instrumental": true}', 200)));
+    expect(await instrumental.find(t), '');
   });
 
   test('dominant color prefers the saturated area over dark pixels', () {

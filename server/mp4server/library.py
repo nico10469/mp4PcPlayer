@@ -119,3 +119,15 @@ def track_from_info(info: dict, filename: str) -> Track:
         year=_year(info),
         source_url=info.get("webpage_url"),
     )
+
+
+def apply_hints(track: Track, hints: dict) -> Track:
+    """La copertina quadrata di YouTube Music vince sulla miniatura del video;
+    album e artista dell'album riempiono solo i campi che yt-dlp ha lasciato vuoti."""
+    if hints.get("cover"):
+        track.thumbnail = hints["cover"]
+    if hints.get("album") and not track.album:
+        track.album = hints["album"]
+    if hints.get("album_artist") and not track.album_artist:
+        track.album_artist = hints["album_artist"]
+    return track

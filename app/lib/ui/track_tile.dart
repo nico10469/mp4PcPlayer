@@ -45,7 +45,7 @@ class TrackTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (scope.playlists.isFavorite(track))
-                const Icon(Icons.favorite, size: 16, color: AppColors.accent, semanticLabel: 'Preferito'),
+                const Icon(Icons.favorite, size: 16, color: AppColors.favoriteOnDark, semanticLabel: 'Preferito'),
               TrackMenuButton(track: track, playlist: playlist),
             ],
           ),
@@ -104,8 +104,8 @@ class TrackMenuButton extends StatelessWidget {
         item(_TrackAction.showArtist, 'Mostra artista', Icons.mic_external_on),
         item(
           _TrackAction.favorite,
-          favorite ? 'Togli dai preferiti' : 'Preferito',
-          favorite ? Icons.heart_broken : Icons.favorite,
+          favorite ? 'Non mi piace più' : 'Mi piace',
+          favorite ? Icons.heart_broken : Icons.favorite_border,
         ),
         item(_TrackAction.info, 'Info brano', Icons.info_outline),
       ],

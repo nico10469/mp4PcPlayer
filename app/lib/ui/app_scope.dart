@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../services/download_manager.dart';
 import '../services/library_store.dart';
+import '../services/lyrics_service.dart';
 import '../services/player_controller.dart';
 import '../services/playlist_store.dart';
 import '../services/settings.dart';
@@ -15,6 +16,7 @@ class AppScope extends InheritedWidget {
     required this.playlists,
     required this.downloads,
     required this.player,
+    required this.lyrics,
     required super.child,
   });
 
@@ -23,6 +25,7 @@ class AppScope extends InheritedWidget {
   final PlaylistStore playlists;
   final DownloadManager downloads;
   final PlayerController player;
+  final LyricsService lyrics;
 
   static AppScope of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!;
 
@@ -32,5 +35,6 @@ class AppScope extends InheritedWidget {
       library != old.library ||
       playlists != old.playlists ||
       downloads != old.downloads ||
-      player != old.player;
+      player != old.player ||
+      lyrics != old.lyrics;
 }

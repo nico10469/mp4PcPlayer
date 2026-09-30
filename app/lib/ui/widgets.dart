@@ -292,3 +292,21 @@ String tracksSummary(int count, Duration total) {
 }
 
 String formatDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+/// Il logo di Carrots MP4 (la carota in pixel art), disegnato senza sfocare i pixel.
+class AppLogo extends StatelessWidget {
+  const AppLogo({super.key, this.size = 40});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/logo.png',
+      width: size,
+      height: size,
+      filterQuality: FilterQuality.none,
+      semanticLabel: 'Carrots MP4',
+    );
+  }
+}

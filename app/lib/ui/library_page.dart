@@ -4,6 +4,7 @@ import 'app_scope.dart';
 import 'artists_page.dart';
 import 'cover.dart';
 import 'download_page.dart';
+import 'favorites.dart';
 import 'playlist_editor.dart';
 import 'playlists_page.dart';
 import 'settings_page.dart';
@@ -36,7 +37,7 @@ class LibraryPage extends StatelessWidget {
         builder: (context, _) {
           final tracks = scope.library.tracks;
           final recent = tracks.take(20).toList();
-          final favorites = tracks.where(scope.playlists.isFavorite).toList();
+          final favorites = scope.playlists.favoriteTracks;
           final playlists = scope.playlists.playlists;
 
           return CustomScrollView(
@@ -44,8 +45,15 @@ class LibraryPage extends StatelessWidget {
               const SliverAppBar(pinned: true, toolbarHeight: 48),
               const SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text('Libreria', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
+                  padding: EdgeInsets.fromLTRB(20, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text('Libreria', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
+                      ),
+                      AppLogo(size: 40),
+                    ],
+                  ),
                 ),
               ),
               SliverList.list(
@@ -77,7 +85,12 @@ class LibraryPage extends StatelessWidget {
                   ),
                 ),
                 if (favorites.isNotEmpty) ...[
-                  const SliverToBoxAdapter(child: SectionTitle('Preferiti')),
+                  SliverToBoxAdapter(
+                    child: SectionTitle(
+                      'Preferiti',
+                      trailing: TextAction(label: 'Vedi tutti', onPressed: () => openFavorites(context)),
+                    ),
+                  ),
                   SliverToBoxAdapter(
                     child: CoverCarousel(
                       itemCount: favorites.length,
@@ -101,8 +114,17 @@ class LibraryPage extends StatelessWidget {
               ),
               SliverToBoxAdapter(
                 child: CoverCarousel(
-                  itemCount: playlists.length + 1,
+                  itemCount: playlists.length + 2,
                   itemBuilder: (context, i) {
+                    if (i == 1) {
+                      final n = favorites.length;
+                      return CarouselItem(
+                        image: const FavoritesCover(size: 150),
+                        title: 'Preferiti',
+                        subtitle: n == 1 ? '1 brano' : '$n brani',
+                        onTap: () => openFavorites(context),
+                      );
+                    }
                     if (i == 0) {
                       return CarouselItem(
                         image: Container(
@@ -122,7 +144,7 @@ class LibraryPage extends StatelessWidget {
                         },
                       );
                     }
-                    final p = playlists[i - 1];
+                    final p = playlists[i - 2];
                     return CarouselItem(
                       image: PlaylistCover(playlist: p, size: 150),
                       title: p.name,

@@ -104,7 +104,7 @@ jobs:
         working-directory: server
         run: |
           pip install -r requirements.txt pyinstaller
-          pyinstaller --noconfirm --onefile --name mp4player-server --collect-submodules uvicorn --collect-submodules yt_dlp --distpath ../dist run_server.py
+          pyinstaller --noconfirm --onefile --name mp4player-server --collect-submodules uvicorn --collect-submodules yt_dlp --collect-all ytmusicapi --distpath ../dist run_server.py
 
       - name: App Windows
         working-directory: app
@@ -148,7 +148,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.name }}
-          name: mp4Player ${{ needs.version.outputs.name }}
+          name: Carrots MP4 ${{ needs.version.outputs.name }}
           target_commitish: ${{ github.sha }}
           body: |
             **Windows:** download `mp4Player-windows-setup.exe` and open it. It contains the app and the download server.

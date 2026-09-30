@@ -54,14 +54,24 @@ class ServerApi {
     return data['yt_dlp'] as String;
   }
 
-  Future<List<SearchResult>> search(String query) async {
-    final data = await _json(_client.get(_uri('/search', {'q': query}), headers: _headers)) as List;
+  /// Cerca su YouTube Music: brani (le versioni ufficiali con la sola copertina), album o playlist.
+  Future<List<SearchResult>> search(String query, {ResultKind kind = ResultKind.song}) async {
+    final params = {'q': query, 'kind': '${kind.name}s'};
+    final data = await _json(_client.get(_uri('/search', params), headers: _headers)) as List;
     return data.map((e) => SearchResult.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// [source] è un id video o un link YouTube.
-  Future<ServerJob> startDownload(String source) async {
-    final data = await _json(_client.post(_uri('/downloads'), headers: _headers, body: jsonEncode({'source': source})));
+  /// I brani di un album o di una playlist. [source] è l'id o un link YouTube / YouTube Music.
+  Future<Collection> collection(String source) async {
+    final data = await _json(_client.get(_uri('/collection', {'source': source}), headers: _headers));
+    return Collection.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// [source] è un id video o un link YouTube. [cover] e [album] arrivano dalla ricerca
+  /// su YouTube Music: la copertina quadrata vince sulla miniatura del video.
+  Future<ServerJob> startDownload(String source, {String? cover, String? album, String? albumArtist}) async {
+    final body = {'source': source, 'cover': ?cover, 'album': ?album, 'album_artist': ?albumArtist};
+    final data = await _json(_client.post(_uri('/downloads'), headers: _headers, body: jsonEncode(body)));
     return ServerJob.fromJson(data as Map<String, dynamic>);
   }
 

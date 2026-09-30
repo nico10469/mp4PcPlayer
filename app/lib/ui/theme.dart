@@ -8,6 +8,13 @@ abstract final class AppColors {
   static const accent = Color(0xFFFA2D48);
   static const textSecondary = Color(0xFF8E8E93);
   static const divider = Color(0xFF38383A);
+
+  /// I Preferiti: cuore viola su sfondo lilla.
+  static const favorite = Color(0xFF7B2CBF);
+  static const favoriteBackground = Color(0xFFD9C3F7);
+
+  /// Il viola dei cuori sul fondo nero (più chiaro, per leggersi bene).
+  static const favoriteOnDark = Color(0xFFB57BFF);
 }
 
 ThemeData buildTheme() {

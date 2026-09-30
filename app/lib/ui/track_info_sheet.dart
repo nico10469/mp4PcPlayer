@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,7 +10,8 @@ import 'cover.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Scheda con i metadati del brano (artista, album, genere, anno...) e la possibilità di modificarli.
+/// Scheda con i metadati del brano (copertina, titolo, artista, album, genere, anno, testo...)
+/// e la possibilità di modificarli.
 Future<void> showTrackInfo(BuildContext context, Track track) {
   return showModalBottomSheet<void>(
     context: context,
@@ -38,17 +42,47 @@ class _TrackInfo extends StatefulWidget {
 class _TrackInfoState extends State<_TrackInfo> {
   bool _editing = false;
   int? _size;
+  bool _started = false;
+  bool _searchingLyrics = false;
+  String? _lyricsError;
   final _fields = {
-    for (final k in ['title', 'artist', 'album', 'albumArtist', 'genre', 'year']) k: TextEditingController(),
+    for (final k in ['title', 'artist', 'album', 'albumArtist', 'genre', 'year', 'lyrics']) k: TextEditingController(),
   };
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_size != null) return;
+    if (_started) return;
+    _started = true;
     final scope = AppScope.of(context);
     final file = scope.library.audioFile(widget.fallback);
     file.length().then((v) => mounted ? setState(() => _size = v) : null, onError: (_) {});
+    // Il testo si cerca da solo la prima volta che si aprono le info del brano.
+    if (_track(scope).lyrics == null) _findLyrics();
+  }
+
+  Future<void> _findLyrics() async {
+    final scope = AppScope.of(context);
+    setState(() {
+      _searchingLyrics = true;
+      _lyricsError = null;
+    });
+    try {
+      final text = await scope.lyrics.find(_track(scope));
+      final current = _track(scope);
+      // Un testo scritto a mano nel frattempo non si sovrascrive.
+      if (current.lyrics == null || current.lyrics!.isEmpty) await scope.library.update(current.copyWith(lyrics: text));
+    } catch (_) {
+      _lyricsError = 'Non riesco a raggiungere LRCLIB: controlla la connessione a internet.';
+    } finally {
+      if (mounted) setState(() => _searchingLyrics = false);
+    }
+  }
+
+  Future<void> _changeCover(AppScope scope, Track t) async {
+    final picked = await FilePicker.pickFile(type: FileType.image, dialogTitle: 'Scegli la copertina');
+    final path = picked?.path;
+    if (path != null) await scope.library.setCover(t, File(path));
   }
 
   @override
@@ -73,6 +107,7 @@ class _TrackInfoState extends State<_TrackInfo> {
     _fields['albumArtist']!.text = t.albumArtist ?? '';
     _fields['genre']!.text = t.genre ?? '';
     _fields['year']!.text = t.year?.toString() ?? '';
+    _fields['lyrics']!.text = t.lyrics ?? '';
     setState(() => _editing = true);
   }
 
@@ -85,6 +120,7 @@ class _TrackInfoState extends State<_TrackInfo> {
         albumArtist: _fields['albumArtist']!.text,
         genre: _fields['genre']!.text,
         year: int.tryParse(_fields['year']!.text.trim()),
+        lyrics: _fields['lyrics']!.text,
       ),
     );
     if (mounted) setState(() => _editing = false);
@@ -103,7 +139,31 @@ class _TrackInfoState extends State<_TrackInfo> {
           children: [
             Row(
               children: [
-                Cover.track(scope.library, t, size: 72, radius: 8),
+                if (_editing)
+                  Tooltip(
+                    message: 'Cambia copertina',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _changeCover(scope, t),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Cover.track(scope.library, t, size: 72, radius: 8),
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: const Color(0x88000000),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.photo_camera, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Cover.track(scope.library, t, size: 72, radius: 8),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -126,30 +186,91 @@ class _TrackInfoState extends State<_TrackInfo> {
               ],
             ),
             const SizedBox(height: 16),
-            if (_editing) ..._editor() else ..._details(t),
+            if (_editing) ..._editor(scope, t) else ...[..._details(t), ..._lyrics(t)],
           ],
         );
       },
     );
   }
 
-  List<Widget> _editor() {
-    Widget field(String key, String label, {bool number = false}) => Padding(
+  List<Widget> _editor(AppScope scope, Track t) {
+    Widget field(String key, String label, {bool number = false, bool multiline = false}) => Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: _fields[key],
-        keyboardType: number ? TextInputType.number : TextInputType.text,
+        keyboardType: number
+            ? TextInputType.number
+            : multiline
+            ? TextInputType.multiline
+            : TextInputType.text,
+        minLines: multiline ? 4 : 1,
+        maxLines: multiline ? 12 : 1,
         inputFormatters: number ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)] : null,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(labelText: label, alignLabelWithHint: multiline),
       ),
     );
     return [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+          onPressed: () => _changeCover(scope, t),
+          icon: const Icon(Icons.image),
+          label: const Text('Cambia copertina'),
+        ),
+      ),
+      const SizedBox(height: 8),
       field('title', 'Titolo'),
       field('artist', 'Artista'),
       field('album', 'Album'),
       field('albumArtist', 'Artista dell\'album'),
       field('genre', 'Genere'),
       field('year', 'Anno', number: true),
+      field('lyrics', 'Testo', multiline: true),
+    ];
+  }
+
+  List<Widget> _lyrics(Track t) {
+    final text = t.lyrics;
+    Widget body;
+    if (_searchingLyrics) {
+      body = const Row(
+        children: [
+          SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Text('Cerco il testo…', style: TextStyle(color: AppColors.textSecondary)),
+        ],
+      );
+    } else if (text != null && text.isNotEmpty) {
+      body = SelectableText(text, style: const TextStyle(fontSize: 17, height: 1.5, fontWeight: FontWeight.w600));
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _lyricsError ?? (text == null ? 'Testo non ancora cercato.' : 'Testo non trovato (o brano strumentale).'),
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.accent, padding: EdgeInsets.zero),
+            onPressed: _findLyrics,
+            child: const Text('Cerca di nuovo'),
+          ),
+        ],
+      );
+    }
+    return [
+      const SizedBox(height: 24),
+      const Text('TESTO', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      const SizedBox(height: 10),
+      body,
+      if (text != null && text.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        const Text(
+          'Testo in lingua originale da LRCLIB o dai tag del file. Puoi correggerlo con Modifica.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      ],
     ];
   }
 

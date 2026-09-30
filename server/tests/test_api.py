@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from mp4server import downloader as dl
+from mp4server import music
 from mp4server.main import create_app
 
 
@@ -82,20 +82,110 @@ def test_token_required(tmp_path):
         assert c.get("/tracks", headers={"Authorization": "Bearer segreto"}).status_code == 200
 
 
-def test_search_maps_entries(client, monkeypatch):
+class FakeMusic:
+    """Risposte ridotte di ytmusicapi, con la stessa forma di quelle vere."""
+
+    def __init__(self, fail=False):
+        self.fail = fail
+
+    def search(self, query, filter, limit):
+        if self.fail:
+            raise RuntimeError("YouTube Music non risponde")
+        thumbs = [{"url": "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj"},
+                  {"url": "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj"}]
+        return {
+            "songs": [
+                {"resultType": "song", "title": "Chandelier", "videoId": "2vjPBrBU-TM", "artists": [{"name": "Sia", "id": "x"}],
+                 "album": {"name": "1000 Forms of Fear", "id": "MPREb_1"}, "duration_seconds": 216, "thumbnails": thumbs,
+                 "isAvailable": True},
+                {"resultType": "song", "title": "Grigio", "videoId": "zzzzzzzzzzz", "artists": [], "isAvailable": False},
+            ],
+            "albums": [
+                {"resultType": "album", "title": "1000 Forms of Fear", "type": "Album", "year": "2014",
+                 "artists": [{"name": "Sia"}], "browseId": "MPREb_1", "thumbnails": thumbs},
+            ],
+            "playlists": [
+                {"resultType": "playlist", "title": "Pop hits", "itemCount": 50, "author": "YouTube Music",
+                 "browseId": "VLPL123456789", "thumbnails": thumbs},
+            ],
+        }[filter]
+
+    def get_album(self, browse_id):
+        assert browse_id == "MPREb_1"
+        return {"title": "1000 Forms of Fear", "artists": [{"name": "Sia"}], "year": "2014",
+                "thumbnails": [{"url": "https://lh3.googleusercontent.com/cov=w544-h544-l90-rj"}],
+                "tracks": [{"videoId": "2vjPBrBU-TM", "title": "Chandelier", "artists": [{"name": "Sia"}],
+                            "album": "1000 Forms of Fear", "duration_seconds": 216, "thumbnails": None}]}
+
+    def get_playlist(self, playlist_id, limit):
+        assert playlist_id == "PL123456789"
+        return {"title": "Pop hits", "author": {"name": "YouTube Music", "id": None}, "thumbnails": [],
+                "tracks": [{"videoId": "2vjPBrBU-TM", "title": "Chandelier", "artists": [{"name": "Sia"}],
+                            "album": {"name": "1000 Forms of Fear"}, "duration_seconds": 216,
+                            "thumbnails": [{"url": "https://i.ytimg.com/vi/2vjPBrBU-TM/sddefault.jpg"}]}]}
+
+
+@pytest.fixture
+def music_client(tmp_path):
+    with TestClient(create_app(tmp_path, token="", fetch=fake_fetch, music_client=FakeMusic())) as c:
+        yield c
+
+
+def test_search_songs_from_youtube_music(music_client):
+    assert music_client.get("/search", params={"q": "sia"}).json() == [
+        {"kind": "song", "id": "2vjPBrBU-TM", "title": "Chandelier", "artist": "Sia", "album": "1000 Forms of Fear",
+         "duration": 216, "thumbnail": "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj", "year": None}
+    ]
+
+
+def test_search_albums_and_playlists(music_client):
+    albums = music_client.get("/search", params={"q": "sia", "kind": "albums"}).json()
+    assert albums == [{"kind": "album", "id": "MPREb_1", "title": "1000 Forms of Fear", "artist": "Sia", "type": "Album",
+                       "year": 2014, "thumbnail": "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj"}]
+    playlists = music_client.get("/search", params={"q": "pop", "kind": "playlists"}).json()
+    assert playlists[0]["id"] == "PL123456789" and playlists[0]["count"] == 50
+    assert music_client.get("/search", params={"q": "x", "kind": "videos"}).status_code == 422
+
+
+def test_album_and_playlist_tracks(music_client):
+    album = music_client.get("/collection", params={"source": "https://music.youtube.com/browse/MPREb_1"}).json()
+    assert album["kind"] == "album" and album["title"] == "1000 Forms of Fear" and album["artist"] == "Sia"
+    # Le tracce degli album non hanno una copertina propria: prendono quella dell'album.
+    assert album["tracks"][0]["thumbnail"] == "https://lh3.googleusercontent.com/cov=w544-h544-l90-rj"
+
+    playlist = music_client.get("/collection", params={"source": "https://www.youtube.com/watch?v=2vjPBrBU-TM&list=PL123456789"}).json()
+    assert playlist["kind"] == "playlist" and playlist["artist"] == "YouTube Music"
+    assert [t["id"] for t in playlist["tracks"]] == ["2vjPBrBU-TM"]
+
+    assert music_client.get("/collection", params={"source": "https://evil.example/?list=PL1"}).status_code == 400
+
+
+def test_download_uses_square_cover_and_album(music_client):
+    r = music_client.post("/downloads", json={"source": "2vjPBrBU-TM", "cover": "https://lh3.googleusercontent.com/cov",
+                                              "album": "1000 Forms of Fear", "album_artist": "Sia"})
+    wait_done(music_client, r.json()["id"])
+    track = music_client.get("/tracks/2vjPBrBU-TM").json()
+    assert track["thumbnail"] == "https://lh3.googleusercontent.com/cov"
+    assert track["album"] == "1000 Forms of Fear" and track["album_artist"] == "Sia"
+
+
+def test_song_search_falls_back_to_youtube_with_topic_first(tmp_path, monkeypatch):
     class FakeYDL:
         def __init__(self, opts): pass
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def extract_info(self, q, download):
-            assert q == "ytsearch15:sia"
-            return {"entries": [{"id": "2vjPBrBU-TM", "title": "Sia - Chandelier", "channel": "SiaVEVO", "duration": 240.0, "thumbnails": []}, None]}
+            assert q == "ytsearch20:sia"
+            return {"entries": [
+                {"id": "video000001", "title": "Sia - Chandelier (Official Video)", "channel": "SiaVEVO", "duration": 240.0, "thumbnails": []},
+                None,
+                {"id": "2vjPBrBU-TM", "title": "Chandelier", "channel": "Sia - Topic", "duration": 216.0, "thumbnails": []},
+            ]}
 
-    monkeypatch.setattr(dl.yt_dlp, "YoutubeDL", FakeYDL)
-    assert client.get("/search", params={"q": "sia"}).json() == [
-        {"id": "2vjPBrBU-TM", "title": "Sia - Chandelier", "artist": "SiaVEVO", "duration": 240.0,
-         "thumbnail": "https://i.ytimg.com/vi/2vjPBrBU-TM/hqdefault.jpg"}
-    ]
+    monkeypatch.setattr(music.yt_dlp, "YoutubeDL", FakeYDL)
+    with TestClient(create_app(tmp_path, token="", fetch=fake_fetch, music_client=FakeMusic(fail=True))) as c:
+        results = c.get("/search", params={"q": "sia"}).json()
+    assert [(r["id"], r["artist"]) for r in results] == [("2vjPBrBU-TM", "Sia"), ("video000001", "SiaVEVO")]
 
 
 def test_old_index_without_new_fields_loads(tmp_path):
