@@ -42,7 +42,6 @@ dependencies:
   shared_preferences: ^2.5.5
   audio_session: ^0.2.4
   file_picker: ^13.1.0
-  permission_handler: ^13.0.2
   audio_metadata_reader: ^1.8.0
 
 dev_dependencies:
