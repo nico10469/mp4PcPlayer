@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -5,6 +6,7 @@ import '../models/track.dart';
 import '../services/cover_colors.dart';
 import '../services/player_controller.dart';
 import 'app_scope.dart';
+import 'artists_page.dart';
 import 'cover.dart';
 import 'favorites.dart';
 import 'theme.dart';
@@ -118,13 +120,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: fg),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              [track.artist, if (track.album != null) track.album!].join(' — '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 18, color: secondary),
-                            ),
+                            ArtistLine(track: track, color: secondary),
                             const SizedBox(height: 20),
                             _Controls(controller: controller, color: fg),
                             const SizedBox(height: 20),
@@ -340,6 +336,59 @@ class _BottomRow extends StatelessWidget {
           onPressed: () => showTrackInfo(context, track),
         ),
       ],
+    );
+  }
+}
+
+/// "Artista, Ospite — Album" sotto il titolo: ogni nome apre la pagina di quell'artista.
+class ArtistLine extends StatefulWidget {
+  const ArtistLine({super.key, required this.track, required this.color});
+
+  final Track track;
+  final Color color;
+
+  @override
+  State<ArtistLine> createState() => _ArtistLineState();
+}
+
+class _ArtistLineState extends State<ArtistLine> {
+  final _taps = <TapGestureRecognizer>[];
+
+  void _clear() {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+  }
+
+  @override
+  void dispose() {
+    _clear();
+    super.dispose();
+  }
+
+  void _open(String artist) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist: artist)));
+
+  @override
+  Widget build(BuildContext context) {
+    _clear();
+    final names = artistsOf(widget.track);
+    final album = widget.track.album?.trim() ?? '';
+    final spans = <InlineSpan>[];
+    for (final (i, name) in names.indexed) {
+      if (i > 0) spans.add(const TextSpan(text: ', '));
+      final tap = TapGestureRecognizer()..onTap = () => _open(name);
+      _taps.add(tap);
+      spans.add(TextSpan(text: name, recognizer: tap));
+    }
+    if (album.isNotEmpty) spans.add(TextSpan(text: ' — $album'));
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 18, color: widget.color),
     );
   }
 }
