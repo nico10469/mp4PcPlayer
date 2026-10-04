@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Dove si scarica la musica: direttamente nell'app o tramite il server yt-dlp.
+enum DownloadMode { device, server }
+
 /// Impostazioni salvate sul dispositivo: server yt-dlp e cartella della musica.
 class Settings extends ChangeNotifier {
   Settings(this._prefs);
@@ -12,6 +15,19 @@ class Settings extends ChangeNotifier {
   static const _urlKey = 'server_url';
   static const _tokenKey = 'server_token';
   static const _musicDirKey = 'music_dir';
+  static const _modeKey = 'download_mode';
+
+  /// Su telefono si scarica nell'app; su PC c'è già il server (l'installer Windows lo include).
+  static DownloadMode get defaultMode =>
+      Platform.isAndroid || Platform.isIOS ? DownloadMode.device : DownloadMode.server;
+
+  DownloadMode get downloadMode =>
+      DownloadMode.values.where((m) => m.name == _prefs.getString(_modeKey)).firstOrNull ?? defaultMode;
+
+  Future<void> setDownloadMode(DownloadMode mode) async {
+    await _prefs.setString(_modeKey, mode.name);
+    notifyListeners();
+  }
 
   /// Su PC il server di solito gira sullo stesso computer (l'installer Windows lo include).
   static String get defaultUrl =>

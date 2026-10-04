@@ -25,16 +25,22 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 - **Bottom bar:** the library button on the left, the song that is playing in the middle (cover, title, artist, play/pause) and search on the right.
 - **Library:** Playlists, Artists, Songs, Download and Settings. Below them are the recently added songs, your favorites and your playlists.
 - **Playlists:** you can create a playlist with its own cover image, description and songs, sort your playlists and search them. Each song has a menu with remove from playlist, delete, add to playlist, play next, show artist, favorite and track info.
-- **Artists:** every artist in your library, with their albums.
+- **Artists:** every artist in your library. Songs downloaded from v0.4.0 keep only the main artists and the featured guests (no producers or writers), and a song with a guest shows up under both. An artist's page shows the 5 songs you play most, with how many times you played them, then all of the artist's albums and singles from YouTube Music (the ones you already have say "In libreria"; the others open to be downloaded). Offline it shows the albums in your library.
 - **Search:** it searches your library as you type. Press Enter to search YouTube too and download from the results.
 - **Player:** the full-screen player takes the dominant color of the cover. The heart adds the song to your Favorites, and the "…" button shows the track's metadata (artist, album, genre, year, duration, format, source).
 - **Edit metadata:** in the track info, "Modifica" lets you change the cover (pick any image), title, artist, album, album artist, genre, year and lyrics.
 - **Lyrics:** the track info shows the lyrics in their original language. They come from the file's tags when present, otherwise from [LRCLIB](https://lrclib.net), a free lyrics archive, and are saved with the song.
 - **Favorites:** the songs you like go in a special "Preferiti" folder with a purple heart on a lilac background, next to your playlists. The files are not duplicated.
 - **Your music folder:** in Settings you can choose the folder where your songs are saved (on Android the app asks for "All files access" first). Your existing songs are moved there with readable names (`Artist - Title.m4a`), and any audio files already in that folder (mp3, m4a, flac, ogg...) are added to the library with their tags and covers. On iPhone the songs go in the app's folder, visible in the Files app.
+- **Download without a server:** on Android and iPhone the app searches YouTube Music and downloads the audio by itself, with no server (Settings > Download > "Nell'app"). On a PC the default is the server, which you can still pick on the phone too.
 - **Download:** it searches YouTube Music, so it shows the official audio tracks (just the album cover, no video) first. The Albums and Playlists tabs let you download a whole album or playlist in one tap; a downloaded playlist also becomes a playlist in the app. You can paste a YouTube or YouTube Music link to a song, an album or a playlist.
 
 ## How it works
+
+There are two ways to download, chosen in Settings:
+
+- **In the app** (default on Android and iPhone): the app talks to YouTube Music directly and downloads the audio with [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart). Nothing else to install. When YouTube changes something, downloads may stop until a new version of the app comes out.
+- **With the server** (default on PC):
 
 ```
   App (Flutter)                              Server (Python)
@@ -54,7 +60,7 @@ Audio is saved as **m4a (AAC)**, which plays everywhere, iPhone included. If `ff
 From the links above (or the [Releases](https://github.com/nico10469/mp4PcPlayer/releases) page) you can download:
 
 - **`mp4Player-windows-setup.exe`**: the Windows installer. It installs the app and, if you leave its box ticked, the **download server** too. You don't need to install Python. The installer opens port 8000 in the firewall for private (home) networks only, so your phone can reach the server. It can also start the server when the PC starts.
-- **`mp4Player-android.apk`**: the Android app. Open it on your phone and allow "Install unknown apps" when Android asks. Then go to Library > Settings and type the address that the server window shows on the PC.
+- **`mp4Player-android.apk`**: the Android app. Open it on your phone and allow "Install unknown apps" when Android asks. It downloads music by itself; if you prefer the PC server, go to Library > Settings, pick "Con il server" and type the address that the server window shows on the PC.
 
 The installers are built by the **Installer** GitHub Action (`.github/workflows/installer.yml`):
 
@@ -94,7 +100,7 @@ If the server can be reached from the internet, **always set `MP4_TOKEN`**. The 
 
 When YouTube changes something and downloads or searches stop working, update the server's libraries with `pip install -U yt-dlp ytmusicapi`. The app doesn't need to change.
 
-Main API: `GET /search?q=&kind=songs|albums|playlists`, `GET /collection?source=` (the songs of an album or playlist), `POST /downloads {"source": id or link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. The interactive documentation is at `http://server:8000/docs`.
+Main API: `GET /search?q=&kind=songs|albums|playlists`, `GET /collection?source=` (the songs of an album or playlist), `GET /artist?name=` (an artist's albums and singles), `POST /downloads {"source": id or link}`, `GET /downloads/{job}`, `GET /tracks`, `GET /tracks/{id}/file`. The interactive documentation is at `http://server:8000/docs`.
 
 ## 2. Starting the app
 
@@ -106,7 +112,7 @@ flutter pub get
 flutter run -d windows     # or macos, linux, or a connected phone
 ```
 
-On first launch go to **Library > Settings**, type the server address (e.g. `http://192.168.1.10:8000`) and press "Salva e prova la connessione" (save and test the connection). On a PC the default address is already `http://127.0.0.1:8000`, that is, the server on the same computer.
+On a phone you can download right away. To use the server instead, go to **Library > Settings**, pick "Con il server", type the server address (e.g. `http://192.168.1.10:8000`) and press "Salva e prova la connessione" (save and test the connection). On a PC the default address is already `http://127.0.0.1:8000`, that is, the server on the same computer.
 
 To build an installable app:
 

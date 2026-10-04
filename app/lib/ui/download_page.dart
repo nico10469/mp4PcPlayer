@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/track.dart';
 import '../services/download_manager.dart';
-import '../services/server_api.dart';
+import '../services/music_catalog.dart';
 import 'app_scope.dart';
 import 'cover.dart';
 import 'theme.dart';
@@ -68,9 +68,9 @@ class _DownloadPageState extends State<DownloadPage> {
       _error = null;
     });
     try {
-      final results = await downloads.api.search(_query, kind: _kind);
+      final results = await downloads.catalog.search(_query, kind: _kind);
       if (mounted) setState(() => _results = results);
-    } on ServerException catch (e) {
+    } on CatalogException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -201,6 +201,7 @@ class YoutubeResultTile extends StatelessWidget {
             final messenger = ScaffoldMessenger.of(context);
             final track = await scope.downloads.download(
               r.id,
+              result: r,
               cover: r.thumbnail ?? fallbackCover,
               album: album ?? r.album,
               albumArtist: albumArtist,
@@ -275,7 +276,7 @@ class _CollectionPageState extends State<CollectionPage> {
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    _future = AppScope.of(context).downloads.api.collection(widget.source);
+    _future = AppScope.of(context).downloads.catalog.collection(widget.source);
   }
 
   @override
@@ -323,7 +324,7 @@ class _CollectionPageState extends State<CollectionPage> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      snap.error is ServerException ? (snap.error as ServerException).message : '${snap.error}',
+                      snap.error is CatalogException ? (snap.error as CatalogException).message : '${snap.error}',
                       style: const TextStyle(color: AppColors.accent),
                     ),
                   ),

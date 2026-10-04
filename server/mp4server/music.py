@@ -55,6 +55,17 @@ def _artists(value) -> str:
     return ""
 
 
+def _artist_list(value) -> list[str]:
+    """Gli artisti uno per uno (principali e ospiti, come li mostra YouTube Music)."""
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, dict):
+        value = [value]
+    if isinstance(value, list):
+        return [a["name"].strip() for a in value if isinstance(a, dict) and (a.get("name") or "").strip()]
+    return []
+
+
 def _album_name(value) -> str | None:
     if isinstance(value, dict):
         return value.get("name")
@@ -78,6 +89,7 @@ def song_from_item(item: dict, album: str | None = None, cover: str | None = Non
         "id": video_id,
         "title": item.get("title") or video_id,
         "artist": _artists(item.get("artists")),
+        "artists": _artist_list(item.get("artists")),
         "album": _album_name(item.get("album")) or album,
         "duration": item.get("duration_seconds"),
         "thumbnail": _cover(item) or cover or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
@@ -93,6 +105,7 @@ def album_from_item(item: dict) -> dict | None:
         "id": item["browseId"],
         "title": item.get("title") or "",
         "artist": _artists(item.get("artists")) or item.get("artist") or "",
+        "artists": _artist_list(item.get("artists")) or _artist_list(item.get("artist")),
         "type": item.get("type"),
         "year": _year(item.get("year")),
         "thumbnail": _cover(item),
@@ -243,4 +256,58 @@ def _collection_with_ytdlp(playlist_id: str) -> dict:
         "year": None,
         "thumbnail": thumbnail_for(info) if info.get("thumbnails") else (tracks[0]["thumbnail"] if tracks else None),
         "tracks": tracks,
+    }
+
+
+def song_artists(video_id: str, client=None) -> list[str]:
+    """Gli artisti principali di un brano secondo YouTube Music (dalla coda "Prossimi")."""
+    playlist = (client or default_client()).get_watch_playlist(videoId=video_id, limit=1)
+    for track in playlist.get("tracks") or []:
+        if track.get("videoId") == video_id:
+            return _artist_list(track.get("artists"))
+    return []
+
+
+def _release(item: dict, artist: str, default_type: str) -> dict | None:
+    if not item.get("browseId"):
+        return None
+    return {
+        "kind": "album",
+        "id": item["browseId"],
+        "title": item.get("title") or "",
+        "artist": artist,
+        "artists": [artist] if artist else [],
+        "type": item.get("type") or default_type,
+        "year": _year(item.get("year")),
+        "thumbnail": _cover(item),
+    }
+
+
+def discography(name: str, client=None) -> dict:
+    """Album, singoli ed EP di un artista, cercato per nome su YouTube Music."""
+    client = client or default_client()
+    found = [a for a in client.search(name, filter="artists", limit=10) if a.get("browseId")]
+    if not found:
+        raise LookupError("Artista non trovato su YouTube Music")
+    wanted = name.strip().lower()
+    best = next((a for a in found if (a.get("artist") or "").strip().lower() == wanted), found[0])
+    page = client.get_artist(best["browseId"])
+    artist = page.get("name") or best.get("artist") or name
+
+    def releases(key: str, default_type: str) -> list[dict]:
+        shelf = page.get(key) or {}
+        items = shelf.get("results") or []
+        if shelf.get("browseId") and shelf.get("params"):
+            try:
+                items = client.get_artist_albums(shelf["browseId"], shelf["params"], limit=None) or items
+            except Exception:
+                pass
+        return [r for r in (_release(i, artist, default_type) for i in items) if r]
+
+    return {
+        "id": best["browseId"],
+        "name": artist,
+        "thumbnail": _cover(page),
+        "albums": releases("albums", "Album"),
+        "singles": releases("singles", "Single"),
     }

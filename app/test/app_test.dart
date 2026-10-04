@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mp4player/main.dart';
+import 'package:mp4player/ui/download_page.dart';
 import 'package:mp4player/models/track.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -10,22 +11,29 @@ import 'package:mp4player/services/library_store.dart';
 import 'package:mp4player/services/lyrics_service.dart';
 import 'package:mp4player/services/playlist_store.dart';
 import 'package:mp4player/services/settings.dart';
+import 'package:mp4player/services/yt_music.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<(LibraryStore, PlaylistStore, Settings)> _setUp(WidgetTester tester, Directory dir) async {
+import 'direct_download_test.dart' show fakeYtMusic, FakeAudio;
+
+Future<(LibraryStore, PlaylistStore, Settings)> _setUp(
+  WidgetTester tester,
+  Directory dir, {
+  Map<String, Object> prefs = const {},
+}) async {
   // Schermo alto come un telefono, così la barra in basso non copre i pulsanti da toccare.
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  SharedPreferences.setMockInitialValues({});
-  final prefs = await SharedPreferences.getInstance();
+  SharedPreferences.setMockInitialValues(prefs);
+  final shared = await SharedPreferences.getInstance();
   final library = LibraryStore(dir);
   final playlists = PlaylistStore(library);
   await tester.runAsync(() async {
     await library.load();
     await playlists.load();
   });
-  return (library, playlists, Settings(prefs));
+  return (library, playlists, Settings(shared));
 }
 
 /// Lascia finire le scritture su disco vere (che nel tempo finto dei test non avanzano).
@@ -172,5 +180,85 @@ void main() {
     expect(find.text('Preferiti'), findsOneWidget);
     expect(find.text('Chandelier'), findsOneWidget);
     expect(find.text('1 brano, 0 minuti'), findsOneWidget);
+  });
+
+  testWidgets('artist page: the 5 most played songs with their counts, then every album', (tester) async {
+    final (library, playlists, settings) = await _setUp(tester, dir, prefs: {'download_mode': 'device'});
+    final songs = [
+      ('s1', 'One More Time', 'Discovery', ['Daft Punk']),
+      ('s2', 'Aerodynamic', 'Discovery', ['Daft Punk']),
+      ('s3', 'Digital Love', 'Discovery', ['Daft Punk']),
+      ('s4', 'Get Lucky', 'Random Access Memories', ['Daft Punk', 'Pharrell Williams', 'Nile Rodgers']),
+      ('s5', 'Instant Crush', 'Random Access Memories', ['Daft Punk', 'Julian Casablancas']),
+      ('s6', 'Lose Yourself to Dance', 'Random Access Memories', ['Daft Punk', 'Pharrell Williams']),
+    ];
+    final plays = {'s1': 3, 's2': 0, 's3': 1, 's4': 12, 's5': 5, 's6': 7};
+    await tester.runAsync(() async {
+      for (final (id, title, album, artists) in songs) {
+        File('${dir.path}/$id.m4a').writeAsBytesSync([1]);
+        await library.add(
+          Track(
+            id: id,
+            title: title,
+            artist: artists.join(', '),
+            artists: artists,
+            album: album,
+            fileName: '$id.m4a',
+            addedAt: DateTime(2026, 10, 1),
+          ),
+        );
+        for (var i = 0; i < plays[id]!; i++) {
+          await library.recordPlay(id);
+        }
+      }
+    });
+    await tester.pumpWidget(
+      Mp4PlayerApp(
+        settings: settings,
+        library: library,
+        playlists: playlists,
+        music: YtMusicClient(client: fakeYtMusic()),
+        audio: FakeAudio(),
+      ),
+    );
+
+    await tester.tap(find.text('Artisti'));
+    await tester.pumpAndSettle();
+    // Gli ospiti hanno la loro voce, ma niente produttori o autori.
+    for (final name in ['Daft Punk', 'Julian Casablancas', 'Nile Rodgers', 'Pharrell Williams']) {
+      expect(find.text(name), findsOneWidget);
+    }
+    await tester.tap(find.text('Daft Punk'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('I più ascoltati'), findsOneWidget);
+    final top = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).toList();
+    final order = ['Get Lucky', 'Lose Yourself to Dance', 'Instant Crush', 'One More Time', 'Digital Love'];
+    final positions = [for (final t in order) top.indexOf(t)];
+    expect(positions.every((p) => p >= 0), isTrue);
+    expect([...positions]..sort(), positions);
+    expect(find.text('12'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('riproduzione'), findsOneWidget); // Digital Love: 1
+    expect(find.text('Aerodynamic'), findsNothing); // il sesto non c'è
+
+    await tester.dragUntilVisible(find.text('Homework'), find.byType(CustomScrollView).last, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    // Gli album da YouTube Music: quelli già in libreria lo dicono.
+    expect(find.text('Random Access Memories'), findsOneWidget);
+    expect(find.text('2013 · In libreria'), findsOneWidget);
+    expect(find.text('2001 · In libreria'), findsOneWidget);
+    expect(find.text('1997'), findsOneWidget);
+    await tester.dragUntilVisible(
+      find.text('Singoli ed EP'),
+      find.byType(CustomScrollView).last,
+      const Offset(0, -300),
+    );
+    expect(find.text('Singoli ed EP'), findsOneWidget);
+
+    // Un album che manca si apre per scaricarlo.
+    await tester.tap(find.text('Homework'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CollectionPage), findsOneWidget);
   });
 }

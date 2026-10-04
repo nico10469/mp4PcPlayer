@@ -4,16 +4,14 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../models/track.dart';
+import 'music_catalog.dart';
 
-class ServerException implements Exception {
-  ServerException(this.message);
-  final String message;
-  @override
-  String toString() => message;
+class ServerException extends CatalogException {
+  ServerException(super.message);
 }
 
 /// Client per il server yt-dlp (cartella `server/` del repository).
-class ServerApi {
+class ServerApi implements MusicCatalog {
   ServerApi({required this.baseUrl, this.token = '', http.Client? client}) : _client = client ?? http.Client();
 
   final String baseUrl;
@@ -55,6 +53,7 @@ class ServerApi {
   }
 
   /// Cerca su YouTube Music: brani (le versioni ufficiali con la sola copertina), album o playlist.
+  @override
   Future<List<SearchResult>> search(String query, {ResultKind kind = ResultKind.song}) async {
     final params = {'q': query, 'kind': '${kind.name}s'};
     final data = await _json(_client.get(_uri('/search', params), headers: _headers)) as List;
@@ -62,15 +61,39 @@ class ServerApi {
   }
 
   /// I brani di un album o di una playlist. [source] è l'id o un link YouTube / YouTube Music.
+  @override
   Future<Collection> collection(String source) async {
     final data = await _json(_client.get(_uri('/collection', {'source': source}), headers: _headers));
     return Collection.fromJson(data as Map<String, dynamic>);
   }
 
-  /// [source] è un id video o un link YouTube. [cover] e [album] arrivano dalla ricerca
-  /// su YouTube Music: la copertina quadrata vince sulla miniatura del video.
-  Future<ServerJob> startDownload(String source, {String? cover, String? album, String? albumArtist}) async {
-    final body = {'source': source, 'cover': ?cover, 'album': ?album, 'album_artist': ?albumArtist};
+  @override
+  Future<Discography> discography(String artist) async {
+    final data = await _json(_client.get(_uri('/artist', {'name': artist}), headers: _headers));
+    return Discography.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Il server legge da solo i dati dei link incollati.
+  @override
+  Future<SearchResult?> song(String videoId) async => null;
+
+  /// [source] è un id video o un link YouTube. [cover], [album] e [artists] arrivano dalla ricerca
+  /// su YouTube Music: la copertina quadrata vince sulla miniatura del video, e gli artisti
+  /// (principali e ospiti) sostituiscono l'elenco lungo di yt-dlp, che include anche autori e produttori.
+  Future<ServerJob> startDownload(
+    String source, {
+    String? cover,
+    String? album,
+    String? albumArtist,
+    List<String>? artists,
+  }) async {
+    final body = {
+      'source': source,
+      'cover': ?cover,
+      'album': ?album,
+      'album_artist': ?albumArtist,
+      if (artists != null && artists.isNotEmpty) 'artists': artists,
+    };
     final data = await _json(_client.post(_uri('/downloads'), headers: _headers, body: jsonEncode(body)));
     return ServerJob.fromJson(data as Map<String, dynamic>);
   }

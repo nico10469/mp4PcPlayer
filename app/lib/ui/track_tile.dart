@@ -141,7 +141,8 @@ class TrackMenuButton extends StatelessWidget {
           );
         }
       case _TrackAction.showArtist:
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist: track.artist)));
+        await Navigator.of(context)
+            .push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist: track.artistNames.firstOrNull ?? '')));
       case _TrackAction.favorite:
         await scope.playlists.toggleFavorite(track);
       case _TrackAction.info:

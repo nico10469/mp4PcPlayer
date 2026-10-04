@@ -100,9 +100,11 @@ def default_fetch(url: str, out_dir: Path, on_progress: Callable[[float], None])
 
 
 class Downloader:
-    def __init__(self, library: Library, fetch=default_fetch, workers: int = 2):
+    def __init__(self, library: Library, fetch=default_fetch, workers: int = 2, artist_lookup=None):
         self.library = library
         self._fetch = fetch
+        # videoId -> artisti principali secondo YouTube Music (per i link senza dati della ricerca).
+        self._artist_lookup = artist_lookup
         self._pool = ThreadPoolExecutor(max_workers=workers)
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
@@ -125,7 +127,8 @@ class Downloader:
             info, filename = self._fetch(
                 job.source, self.library.root, lambda p: job.update(progress=p)
             )
-            track = apply_hints(track_from_info(info, filename), job.hints)
+            lookup = None if job.hints.get("artists") else self._artist_lookup
+            track = apply_hints(track_from_info(info, filename, lookup), job.hints)
             self.library.add(track)
             job.update(status="done", progress=1.0, track_id=track.id)
         except Exception as exc:  # yt-dlp solleva molti tipi diversi

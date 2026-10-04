@@ -30,6 +30,10 @@ class LibraryStore extends ChangeNotifier {
 
   File get _index => File('${dir.path}/library.json');
 
+  /// Quante volte è stato ascoltato ogni brano (id → riproduzioni), in `plays.json`.
+  final Map<String, int> _plays = {};
+  File get _playsFile => File('${dir.path}/plays.json');
+
   /// Brani dal più recente.
   List<Track> get tracks => List.unmodifiable(_tracks);
 
@@ -55,10 +59,30 @@ class LibraryStore extends ChangeNotifier {
     return null;
   }
 
+  int playCount(String id) => _plays[id] ?? 0;
+
+  /// Conta un ascolto del brano (lo chiama il player quando un brano parte).
+  Future<void> recordPlay(String id) async {
+    _plays[id] = playCount(id) + 1;
+    final tmp = File('${_playsFile.path}.tmp');
+    await tmp.writeAsString(jsonEncode(_plays));
+    await tmp.rename(_playsFile.path);
+    notifyListeners();
+  }
+
   Future<void> load() async {
     await dir.create(recursive: true);
     _tracks.clear();
     _missing.clear();
+    _plays.clear();
+    if (await _playsFile.exists()) {
+      try {
+        final raw = jsonDecode(await _playsFile.readAsString()) as Map<String, dynamic>;
+        raw.forEach((id, n) => _plays[id] = (n as num).toInt());
+      } on FormatException {
+        // File rovinato: si ricomincia a contare.
+      }
+    }
     if (await _index.exists()) {
       final raw = jsonDecode(await _index.readAsString()) as List;
       for (final item in raw) {

@@ -15,6 +15,10 @@ class PlayerController extends ChangeNotifier {
   List<Track> _queue = const [];
   int? _index;
 
+  /// Per contare ogni ascolto una volta sola: (coda, posizione) dell'ultimo brano contato.
+  int _generation = 0;
+  (int, int)? _counted;
+
   /// Il player si crea al primo uso, così l'app parte anche dove l'audio non è disponibile (test).
   AudioPlayer get player {
     final existing = _player;
@@ -22,9 +26,13 @@ class PlayerController extends ChangeNotifier {
     final p = AudioPlayer();
     p.currentIndexStream.listen((i) {
       _index = i;
+      _countPlay();
       notifyListeners();
     });
-    p.playerStateStream.listen((_) => notifyListeners());
+    p.playerStateStream.listen((_) {
+      _countPlay();
+      notifyListeners();
+    });
     return _player = p;
   }
 
@@ -41,10 +49,19 @@ class PlayerController extends ChangeNotifier {
 
   bool get isPlaying => _player?.playing ?? false;
 
+  /// Un ascolto conta quando il brano comincia davvero a suonare.
+  void _countPlay() {
+    final i = _index;
+    if (!isPlaying || i == null || i >= _queue.length || _counted == (_generation, i)) return;
+    _counted = (_generation, i);
+    library.recordPlay(_queue[i].id).catchError((_) {});
+  }
+
   Future<void> playQueue(List<Track> tracks, {int start = 0, bool shuffle = false}) async {
     if (tracks.isEmpty) return;
     _queue = List.of(tracks);
     _index = start;
+    _generation++;
     notifyListeners();
     await player.setShuffleModeEnabled(shuffle);
     await player.setAudioSources([

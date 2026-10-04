@@ -6,9 +6,11 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'services/direct_audio.dart';
 import 'services/download_manager.dart';
 import 'services/library_store.dart';
 import 'services/lyrics_service.dart';
+import 'services/music_catalog.dart';
 import 'services/player_controller.dart';
 import 'services/playlist_store.dart';
 import 'services/server_api.dart';
@@ -44,6 +46,8 @@ class Mp4PlayerApp extends StatefulWidget {
     required this.playlists,
     this.player,
     this.lyrics,
+    this.music,
+    this.audio,
   });
 
   final Settings settings;
@@ -51,6 +55,10 @@ class Mp4PlayerApp extends StatefulWidget {
   final PlaylistStore playlists;
   final PlayerController? player;
   final LyricsService? lyrics;
+
+  /// YouTube Music e download dell'audio nell'app (i test li sostituiscono).
+  final MusicCatalog? music;
+  final AudioFetcher? audio;
 
   @override
   State<Mp4PlayerApp> createState() => _Mp4PlayerAppState();
@@ -61,6 +69,9 @@ class _Mp4PlayerAppState extends State<Mp4PlayerApp> {
     library: widget.library,
     playlists: widget.playlists,
     api: _api(),
+    mode: widget.settings.downloadMode,
+    music: widget.music,
+    audio: widget.audio,
   );
   late final PlayerController _player = widget.player ?? PlayerController(widget.library);
   late final LyricsService _lyrics = widget.lyrics ?? LyricsService();
@@ -73,7 +84,11 @@ class _Mp4PlayerAppState extends State<Mp4PlayerApp> {
     widget.settings.addListener(_onSettingsChanged);
   }
 
-  void _onSettingsChanged() => _downloads.api = _api();
+  void _onSettingsChanged() {
+    _downloads
+      ..api = _api()
+      ..mode = widget.settings.downloadMode;
+  }
 
   @override
   void dispose() {
