@@ -714,4 +714,64 @@ void main() {
     expect(streams.single.itag, 251);
     expect(versions, [PlayerClient.androidVr.version, PlayerClient.androidVrOld.version]);
   });
+
+  test('a refused link is retried with range= in the URL, then with the next client', () async {
+    final audio = List<int>.generate(10, (i) => i);
+    final players = <String>[];
+    final gets = <String>[];
+    final client = MockClient((req) async {
+      if (req.url.path.endsWith('/player')) {
+        final c = (jsonDecode(req.body) as Map<String, dynamic>)['context']['client'] as Map<String, dynamic>;
+        final name = '${c['clientName']} ${c['clientVersion']}';
+        players.add(name);
+        final url = c['clientName'] == 'ANDROID' ? 'https://gv/android' : 'https://gv/vr?id=${c['clientVersion']}';
+        return http.Response(
+          jsonEncode({
+            'playabilityStatus': {'status': 'OK'},
+            'streamingData': {
+              'adaptiveFormats': [format(140, 'audio/mp4; codecs="mp4a.40.2"', 130000, url: url)],
+            },
+          }),
+          200,
+        );
+      }
+      final range = req.headers['Range'] ?? 'query ${req.url.queryParameters['range']}';
+      gets.add('${req.url.path} $range');
+      // Il visore viene rifiutato in tutti e due i modi; l'app Android passa con &range=.
+      if (req.url.path == '/vr' || req.headers['Range'] != null) return http.Response('', 403);
+      final m = RegExp(r'(\d+)-(\d+)').firstMatch(req.url.queryParameters['range']!)!;
+      return http.Response.bytes(audio.sublist(int.parse(m.group(1)!), int.parse(m.group(2)!) + 1), 206);
+    });
+    final fetcher = YoutubeAudioFetcher(client: client, chunkSize: 6, iosOnly: true, retryDelay: Duration.zero);
+    final file = await fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/song.$ext'));
+
+    expect(file.readAsBytesSync(), audio);
+    expect(players, ['ANDROID_VR 1.65.10', 'ANDROID_VR 1.62.27', 'ANDROID 20.10.38']);
+    expect(gets, [
+      '/vr bytes=0-5',
+      '/vr query 0-5',
+      '/vr bytes=0-5',
+      '/vr query 0-5',
+      '/android bytes=0-5',
+      '/android query 0-5',
+      '/android query 6-9',
+    ]);
+  });
+
+  test('errors are short and say what to do', () {
+    final dns = http.ClientException(
+      "SocketException: Failed host lookup: 'rr6---sn-fpoq-4jvz.googlevideo.com' (OS Error: No address associated with hostname, errno = 7)",
+      Uri.parse('https://rr6---sn-fpoq-4jvz.googlevideo.com/videoplayback?expire=1&sig=abc'),
+    );
+    expect(shortError(dns), 'indirizzo non trovato (rr6---sn-fpoq-4jvz.googlevideo.com)');
+    final offline = downloadFailure(['ANDROID_VR 1.65.10: ${shortError(dns)}', 'IOS: rete: Connection reset']);
+    expect(offline, startsWith('Non riesco a raggiungere YouTube'));
+    expect(offline, isNot(contains('videoplayback')));
+    final refused = downloadFailure([
+      'ANDROID_VR 1.65.10 (itag 140): ${shortError(const AudioHttpException(403))}',
+      'ANDROID: ${shortError(dns)}',
+    ]);
+    expect(refused, startsWith('YouTube ha rifiutato il download'));
+    expect(refused, contains('rifiutato (403)'));
+  });
 }
