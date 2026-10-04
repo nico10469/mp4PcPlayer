@@ -39,7 +39,7 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 
 There are two ways to download, chosen in Settings:
 
-- **In the app** (default on Android and iPhone): the app talks to YouTube Music directly and downloads the audio itself, asking YouTube for an audio-only link with the same client yt-dlp uses (the Quest VR app) and fetching it in 10 MB pieces; [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) is the fallback. Nothing else to install. When YouTube changes something, downloads may stop until a new version of the app comes out.
+- **In the app** (default on Android and iPhone): the app talks to YouTube Music directly. On Android it downloads with the real [yt-dlp](https://github.com/yt-dlp/yt-dlp), bundled through [youtubedl-android](https://github.com/JunkFood02/youtubedl-android) (Python and QuickJS included, which is why the APK is bigger); Settings > "Aggiorna motore download" updates yt-dlp without a new app version. On iPhone and on the computer the app downloads the audio itself, asking YouTube for an audio-only link with the same client yt-dlp uses (the Quest VR app) and fetching it in 10 MB pieces; [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) is the fallback. Nothing else to install. When YouTube changes something, downloads may stop until a new version of the app comes out.
 - **With the server** (default on PC):
 
 ```

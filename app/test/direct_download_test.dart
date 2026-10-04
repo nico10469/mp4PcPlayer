@@ -712,7 +712,7 @@ void main() {
     });
     final streams = await YoutubeAudioFetcher(client: client).streams('dQw4w9WgXcQ');
     expect(streams.single.itag, 251);
-    expect(versions, [PlayerClient.androidVr.version, PlayerClient.androidVrOld.version]);
+    expect(versions, [PlayerClient.androidVr.version, PlayerClient.android.version]);
   });
 
   test('a refused link is retried with range= in the URL, then with the next client', () async {
@@ -746,16 +746,8 @@ void main() {
     final file = await fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/song.$ext'));
 
     expect(file.readAsBytesSync(), audio);
-    expect(players, ['ANDROID_VR 1.65.10', 'ANDROID_VR 1.62.27', 'ANDROID 20.10.38']);
-    expect(gets, [
-      '/vr bytes=0-5',
-      '/vr query 0-5',
-      '/vr bytes=0-5',
-      '/vr query 0-5',
-      '/android bytes=0-5',
-      '/android query 0-5',
-      '/android query 6-9',
-    ]);
+    expect(players, ['ANDROID_VR 1.65.10', 'ANDROID 20.10.38']);
+    expect(gets, ['/vr bytes=0-5', '/vr query 0-5', '/android bytes=0-5', '/android query 0-5', '/android query 6-9']);
   });
 
   test('errors are short and say what to do', () {
@@ -773,5 +765,25 @@ void main() {
     ]);
     expect(refused, startsWith('YouTube ha rifiutato il download'));
     expect(refused, contains('rifiutato (403)'));
+  });
+
+  test('when YouTube asks "are you a bot?" no other client is tried', () async {
+    final players = <String>[];
+    final client = MockClient((req) async {
+      final c = (jsonDecode(req.body) as Map<String, dynamic>)['context']['client'] as Map<String, dynamic>;
+      players.add('${c['clientName']}');
+      return http.Response(
+        jsonEncode({
+          'playabilityStatus': {'status': 'LOGIN_REQUIRED', 'reason': 'Sign in to confirm you are not a bot'},
+        }),
+        200,
+      );
+    });
+    final fetcher = YoutubeAudioFetcher(client: client, retryDelay: Duration.zero);
+    await expectLater(
+      fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/song.$ext')),
+      throwsA(isA<CatalogException>().having((e) => e.message, 'message', startsWith('YouTube ha bloccato per un po'))),
+    );
+    expect(players, ['ANDROID_VR']);
   });
 }

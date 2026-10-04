@@ -90,7 +90,8 @@ class PlayerClient {
     {'osName': 'Android', 'osVersion': '11'},
   );
 
-  static const all = [androidVr, androidVrOld, android];
+  /// Pochi tentativi: tante richieste di fila fanno pensare a YouTube di avere davanti un bot.
+  static const all = [androidVr, android];
 
   String get label => '$name $version';
 }
@@ -198,6 +199,8 @@ class YoutubeAudioFetcher implements AudioFetcher {
         stream = pickAudio(await _player(videoId, c), iosOnly: iosOnly);
       } catch (e) {
         failures.add('${c.label}: ${shortError(e)}');
+        // YouTube pensa che siamo un bot: altre richieste peggiorerebbero il blocco.
+        if (isBlocked(e)) throw CatalogException(downloadFailure(failures));
         continue;
       }
       if (stream == null) {
@@ -210,7 +213,7 @@ class YoutubeAudioFetcher implements AudioFetcher {
         failures.add('${c.label} (itag ${stream.itag}): ${shortError(e)}');
       }
     }
-    // Piano B: youtube_explode_dart, anche qui un client alla volta.
+    // Piano B: youtube_explode_dart, con un client diverso dai nostri.
     for (final client in explodeClients) {
       final name = client.payload['context']['client']['clientName'];
       try {
@@ -232,18 +235,14 @@ class YoutubeAudioFetcher implements AudioFetcher {
         });
       } catch (e) {
         failures.add('$name: ${shortError(e)}');
+        if (isBlocked(e)) break;
       }
     }
     throw CatalogException(downloadFailure(failures));
   }
 
   /// I client di youtube_explode_dart da provare se i nostri non bastano.
-  static final explodeClients = [
-    YoutubeApiClient.androidSdkless,
-    YoutubeApiClient.androidVr,
-    YoutubeApiClient.ios,
-    YoutubeApiClient.tv,
-  ];
+  static final explodeClients = [YoutubeApiClient.ios];
 
   Future<File> _save(
     File file,
@@ -390,6 +389,14 @@ String shortError(Object e) {
   return text;
 }
 
+/// YouTube sta bloccando questa connessione ("non sei un bot?", troppe richieste).
+bool isBlocked(Object e) {
+  if (e is RequestLimitExceededException) return true;
+  if (e is AudioHttpException) return e.status == 429;
+  final text = '$e'.toLowerCase();
+  return text.contains('login_required') || text.contains('not a bot') || text.contains('rate limit');
+}
+
 /// Il messaggio per l'utente: prima la causa probabile, poi i dettagli di ogni tentativo.
 String downloadFailure(List<String> failures) {
   final details = failures.join('; ');
@@ -399,6 +406,11 @@ String downloadFailure(List<String> failures) {
   if (network) {
     return 'Non riesco a raggiungere YouTube: controlla la connessione, e se usi un DNS privato, '
         'una VPN o un blocco pubblicità prova a spegnerlo ($details)';
+  }
+  final lower = details.toLowerCase();
+  if (lower.contains('login_required') || lower.contains('not a bot') || lower.contains('rate limit')) {
+    return 'YouTube ha bloccato per un po\' i download da questa connessione. Aspetta qualche minuto, o '
+        'prova con un\'altra rete (per esempio i dati invece del Wi-Fi) ($details)';
   }
   if (failures.any((f) => RegExp(r'\b403\b').hasMatch(f))) {
     return 'YouTube ha rifiutato il download di questo brano. Riprova tra un po\', oppure usa '

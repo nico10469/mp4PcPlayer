@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../services/server_api.dart';
 import '../services/settings.dart';
 import '../services/storage_access.dart';
+import '../services/ytdlp_audio.dart';
 import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -212,13 +213,18 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          mode == DownloadMode.device
-              ? 'La musica si cerca su YouTube Music e si scarica direttamente su questo dispositivo, '
+          mode == DownloadMode.server
+              ? 'Il server scarica con yt-dlp e manda i brani all\'app. Si aggiorna senza cambiare l\'app.'
+              : YtDlp.available
+              ? 'La musica si cerca su YouTube Music e si scarica su questo telefono con yt-dlp, lo stesso '
+                    'programma del server, senza bisogno del server. Se YouTube cambia qualcosa e i download '
+                    'smettono di funzionare, aggiorna il motore qui sotto.'
+              : 'La musica si cerca su YouTube Music e si scarica direttamente su questo dispositivo, '
                     'senza bisogno del server. Se un giorno YouTube cambia qualcosa e i download smettono '
-                    'di funzionare, aggiorna l\'app o usa il server.'
-              : 'Il server scarica con yt-dlp e manda i brani all\'app. Si aggiorna senza cambiare l\'app.',
+                    'di funzionare, aggiorna l\'app o usa il server.',
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
+        if (mode == DownloadMode.device && YtDlp.available) ...[const SizedBox(height: 12), const EngineTile()],
         if (mode == DownloadMode.server) ...[
           const SizedBox(height: 16),
           TextField(
@@ -285,6 +291,92 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// La versione di yt-dlp nell'app e il pulsante per aggiornarla (solo Android).
+class EngineTile extends StatefulWidget {
+  const EngineTile({super.key, this.ytDlp});
+
+  final YtDlp? ytDlp;
+
+  @override
+  State<EngineTile> createState() => _EngineTileState();
+}
+
+class _EngineTileState extends State<EngineTile> {
+  YtDlp get _ytDlp => widget.ytDlp ?? YtDlp.instance;
+  String? _version;
+  String? _message;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ytDlp.version().then(
+      (v) {
+        if (mounted) setState(() => _version = v);
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _message = 'Il motore non si è avviato: $e');
+      },
+    );
+  }
+
+  Future<void> _update() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    String message;
+    try {
+      final r = await _ytDlp.update();
+      _version = r.version ?? _version;
+      message = r.updated ? 'Aggiornato a ${r.version ?? 'una nuova versione'}' : 'È già l\'ultima versione';
+    } catch (e) {
+      message = 'Aggiornamento non riuscito: $e';
+    }
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _message = message;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.memory, color: AppColors.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Motore download'),
+                  Text(_version ?? 'yt-dlp', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _update,
+          icon: _busy
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.system_update_alt),
+          label: Text(_busy ? 'Aggiornamento in corso…' : 'Aggiorna motore download'),
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 8),
+          Text(_message!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        ],
       ],
     );
   }
