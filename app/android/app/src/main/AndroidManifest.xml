@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Serve per parlare con il server yt-dlp -->
+    <!-- Serve per YouTube, per yt-dlp nell'app e per il server yt-dlp -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Per salvare e leggere i brani nella cartella scelta nelle Impostazioni.
          Android 11+: "Accesso a tutti i file"; Android 10 e precedenti: "Archiviazione". -->

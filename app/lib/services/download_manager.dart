@@ -10,6 +10,7 @@ import 'playlist_store.dart';
 import 'server_api.dart';
 import 'settings.dart';
 import 'yt_music.dart';
+import 'ytdlp_audio.dart';
 
 enum DownloadPhase { server, transfer, done, error }
 
@@ -57,7 +58,9 @@ class DownloadManager extends ChangeNotifier {
 
   /// YouTube Music letto direttamente dall'app.
   MusicCatalog get music => _music ??= YtMusicClient();
-  AudioFetcher get audio => _audio ??= YoutubeAudioFetcher();
+
+  /// Su Android yt-dlp vero; altrove (iPhone, computer) le richieste fatte dall'app.
+  AudioFetcher get audio => _audio ??= YtDlp.available ? YtDlpAudioFetcher() : YoutubeAudioFetcher();
 
   /// Dove si cercano brani, album, playlist e artisti nel modo scelto.
   MusicCatalog get catalog => mode == DownloadMode.server ? api : music;

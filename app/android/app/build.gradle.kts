@@ -35,6 +35,17 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // yt-dlp porta Python e QuickJS per ogni processore: niente x86 a 32 bit, che Flutter non usa.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
+    }
+
+    // Python e QuickJS di yt-dlp si avviano come programmi: devono stare estratti sul telefono.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {
@@ -52,6 +63,7 @@ android {
         release {
             // Senza key.properties si firma con la chiave di debug, così `flutter run --release` funziona lo stesso.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -64,4 +76,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // yt-dlp dentro l'app: https://github.com/JunkFood02/youtubedl-android
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
 }
