@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -79,7 +80,19 @@ class PlayerClient {
     },
   );
 
-  static const all = [androidVr, androidVrOld];
+  /// L'app Android normale senza versione dell'SDK: i suoi link a volte passano quando quelli
+  /// del visore vengono rifiutati.
+  static const android = PlayerClient(
+    'ANDROID',
+    3,
+    '20.10.38',
+    'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+    {'osName': 'Android', 'osVersion': '11'},
+  );
+
+  static const all = [androidVr, androidVrOld, android];
+
+  String get label => '$name $version';
 }
 
 /// Scarica l'audio con richieste fatte a mano all'API di YouTube (come fa yt-dlp), e solo se
@@ -91,6 +104,7 @@ class YoutubeAudioFetcher implements AudioFetcher {
     this.playerUrl = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
     this.clients = PlayerClient.all,
     this.chunkSize = 10 << 20,
+    this.retryDelay = const Duration(seconds: 1),
     bool? iosOnly,
   }) : _http = client ?? http.Client(),
        iosOnly = iosOnly ?? Platform.isIOS;
@@ -102,6 +116,9 @@ class YoutubeAudioFetcher implements AudioFetcher {
 
   /// YouTube rallenta o rifiuta chi chiede tutto il file in una volta: si scarica a pezzi.
   final int chunkSize;
+
+  /// Quanto aspettare prima di riprovare un pezzo (raddoppia ogni volta).
+  final Duration retryDelay;
 
   /// Su iPhone si tiene solo l'AAC, perché l'Opus in webm non si riproduce.
   final bool iosOnly;
@@ -115,9 +132,9 @@ class YoutubeAudioFetcher implements AudioFetcher {
       try {
         final found = await _player(videoId, c);
         if (found.isNotEmpty) return found;
-        errors.add('${c.name} ${c.version}: nessun audio');
+        errors.add('${c.label}: nessun audio');
       } catch (e) {
-        errors.add('${c.name} ${c.version}: $e');
+        errors.add('${c.label}: ${shortError(e)}');
       }
     }
     throw CatalogException(errors.join('; '));
@@ -172,31 +189,61 @@ class YoutubeAudioFetcher implements AudioFetcher {
 
   @override
   Future<File> fetch(String videoId, File Function(String ext) target, {void Function(double)? onProgress}) async {
-    String direct;
-    try {
-      final stream = pickAudio(await streams(videoId), iosOnly: iosOnly);
-      if (stream == null) throw CatalogException('nessun audio adatto');
-      return await _save(target(stream.ext), onProgress, (sink, progress) => _download(stream, sink, progress));
-    } catch (e) {
-      direct = '$e';
+    // Si prova un client alla volta fino in fondo: se YouTube rifiuta il link di uno (403),
+    // quello dopo riceve un link diverso.
+    final failures = <String>[];
+    for (final c in clients) {
+      final AudioStream? stream;
+      try {
+        stream = pickAudio(await _player(videoId, c), iosOnly: iosOnly);
+      } catch (e) {
+        failures.add('${c.label}: ${shortError(e)}');
+        continue;
+      }
+      if (stream == null) {
+        failures.add('${c.label}: nessun audio adatto');
+        continue;
+      }
+      try {
+        return await _save(target(stream.ext), onProgress, (sink, progress) => _download(stream!, sink, progress));
+      } catch (e) {
+        failures.add('${c.label} (itag ${stream.itag}): ${shortError(e)}');
+      }
     }
-    // Piano B: youtube_explode_dart con più client, fermandosi al primo che dà un audio.
-    try {
-      final stream = await _explodeStream(videoId);
-      final ext = stream.container == StreamContainer.mp4 ? 'm4a' : stream.container.name;
-      final total = stream.size.totalBytes;
-      return await _save(target(ext), onProgress, (sink, progress) async {
-        var received = 0;
-        await for (final chunk in yt.videos.streamsClient.get(stream)) {
-          sink.add(chunk);
-          received += chunk.length;
-          if (total > 0) progress(received / total);
+    // Piano B: youtube_explode_dart, anche qui un client alla volta.
+    for (final client in explodeClients) {
+      final name = client.payload['context']['client']['clientName'];
+      try {
+        final manifest = await yt.videos.streamsClient.getManifest(videoId, ytClients: [client]);
+        final stream = pickExplodeAudio(manifest.audioOnly, iosOnly: iosOnly);
+        if (stream == null) {
+          failures.add('$name: nessun audio adatto');
+          continue;
         }
-      });
-    } catch (e) {
-      throw CatalogException('YouTube non ha dato l\'audio del brano ($direct; $e)');
+        final ext = stream.container == StreamContainer.mp4 ? 'm4a' : stream.container.name;
+        final total = stream.size.totalBytes;
+        return await _save(target(ext), onProgress, (sink, progress) async {
+          var received = 0;
+          await for (final chunk in yt.videos.streamsClient.get(stream)) {
+            sink.add(chunk);
+            received += chunk.length;
+            if (total > 0) progress(received / total);
+          }
+        });
+      } catch (e) {
+        failures.add('$name: ${shortError(e)}');
+      }
     }
+    throw CatalogException(downloadFailure(failures));
   }
+
+  /// I client di youtube_explode_dart da provare se i nostri non bastano.
+  static final explodeClients = [
+    YoutubeApiClient.androidSdkless,
+    YoutubeApiClient.androidVr,
+    YoutubeApiClient.ios,
+    YoutubeApiClient.tv,
+  ];
 
   Future<File> _save(
     File file,
@@ -222,38 +269,64 @@ class YoutubeAudioFetcher implements AudioFetcher {
     final agent = stream.userAgent ?? YoutubeHttpClient.defaultHeaders['user-agent']!;
     // Senza dimensione nota si chiede tutto il file in una volta.
     if (total == null || total <= 0) {
-      await _range(stream.url, agent, null, sink, (_) {});
+      await _range(stream.url, agent, null, sink, (_) {}, inQuery: false);
       return;
     }
+    // Il pezzo si chiede con l'header Range, come yt-dlp; se YouTube lo rifiuta si riprova con
+    // `&range=` nel link, come fa il sito.
+    var inQuery = false;
     var start = 0;
     while (start < total) {
       final end = (start + chunkSize < total ? start + chunkSize : total) - 1;
       var tries = 0;
       while (true) {
         try {
-          final got = await _range(stream.url, agent, (start, end), sink, (n) => progress((start + n) / total));
-          if (got == 0) throw CatalogException('il server dell\'audio non ha mandato dati');
+          final got = await _range(
+            stream.url,
+            agent,
+            (start, end),
+            sink,
+            (n) => progress((start + n) / total),
+            inQuery: inQuery,
+          );
+          if (got == 0) throw const AudioHttpException(0);
           start += got;
           break;
-        } on CatalogException {
+        } on AudioHttpException catch (e) {
+          if (e.status == 403 && start == 0 && !inQuery) {
+            inQuery = true;
+            continue;
+          }
           rethrow;
         } catch (_) {
-          // Una connessione caduta a metà: si riprova il pezzo, ma solo un paio di volte. I byte
-          // già scritti non si perdono: si riparte da dove si era arrivati.
-          if (++tries >= 3) rethrow;
+          // Rete caduta o indirizzo non trovato: si riprova il pezzo dopo una pausa. I byte già
+          // scritti non si perdono, si riparte da dove si era arrivati.
+          if (++tries >= 4) rethrow;
+          await Future<void>.delayed(retryDelay * tries);
         }
       }
     }
   }
 
   /// Scarica un pezzo del file e restituisce quanti byte ha scritto.
-  Future<int> _range(String url, String agent, (int, int)? range, IOSink sink, void Function(int) progress) async {
-    final req = http.Request('GET', Uri.parse(url))..headers['User-Agent'] = agent;
-    if (range != null) req.headers['Range'] = 'bytes=${range.$1}-${range.$2}';
+  Future<int> _range(
+    String url,
+    String agent,
+    (int, int)? range,
+    IOSink sink,
+    void Function(int) progress, {
+    required bool inQuery,
+  }) async {
+    var uri = Uri.parse(url);
+    if (range != null && inQuery) {
+      uri = uri.replace(queryParameters: {...uri.queryParameters, 'range': '${range.$1}-${range.$2}'});
+    }
+    final req = http.Request('GET', uri)..headers['User-Agent'] = agent;
+    if (range != null && !inQuery) req.headers['Range'] = 'bytes=${range.$1}-${range.$2}';
     final res = await _http.send(req);
     if (res.statusCode != 200 && res.statusCode != 206) {
       await res.stream.drain<void>();
-      throw CatalogException('il server dell\'audio ha risposto ${res.statusCode}');
+      throw AudioHttpException(res.statusCode);
     }
     var got = 0;
     try {
@@ -266,25 +339,6 @@ class YoutubeAudioFetcher implements AudioFetcher {
       if (got == 0) rethrow;
     }
     return got;
-  }
-
-  Future<AudioOnlyStreamInfo> _explodeStream(String videoId) async {
-    Object? last;
-    for (final client in [
-      YoutubeApiClient.androidVr,
-      YoutubeApiClient.ios,
-      YoutubeApiClient.tv,
-      YoutubeApiClient.androidSdkless,
-    ]) {
-      try {
-        final manifest = await yt.videos.streamsClient.getManifest(videoId, ytClients: [client]);
-        final stream = pickExplodeAudio(manifest.audioOnly, iosOnly: iosOnly);
-        if (stream != null) return stream;
-      } catch (e) {
-        last = e;
-      }
-    }
-    throw last ?? CatalogException('nessun audio');
   }
 
   @override
@@ -303,6 +357,54 @@ class YoutubeAudioFetcher implements AudioFetcher {
       return null;
     }
   }
+}
+
+/// Il server dell'audio ha risposto con un codice d'errore (0 = nessun dato).
+class AudioHttpException implements Exception {
+  const AudioHttpException(this.status);
+
+  final int status;
+
+  @override
+  String toString() => status == 0 ? 'nessun dato' : 'rifiutato ($status)';
+}
+
+/// Un errore in poche parole, senza i link lunghissimi di YouTube.
+String shortError(Object e) {
+  if (e is CatalogException) return e.message;
+  if (e is AudioHttpException) return '$e';
+  if (e is SocketException) {
+    final host = e.address?.host;
+    final lookup = e.message.contains('host lookup') || e.osError?.errorCode == 7;
+    if (lookup) return 'indirizzo non trovato${host == null ? '' : ' ($host)'}';
+    return 'rete: ${e.osError?.message ?? e.message}';
+  }
+  if (e is http.ClientException) {
+    final m = RegExp(r"Failed host lookup: '([^']+)'").firstMatch(e.message);
+    if (m != null) return 'indirizzo non trovato (${m.group(1)})';
+    return 'rete: ${e.message.replaceAll(RegExp(r'https?://\S+'), '…')}';
+  }
+  if (e is TimeoutException) return 'tempo scaduto';
+  var text = '$e'.replaceAll(RegExp(r'https?://\S+'), '…').replaceAll(RegExp(r'\s+'), ' ');
+  if (text.length > 160) text = '${text.substring(0, 160)}…';
+  return text;
+}
+
+/// Il messaggio per l'utente: prima la causa probabile, poi i dettagli di ogni tentativo.
+String downloadFailure(List<String> failures) {
+  final details = failures.join('; ');
+  final network =
+      failures.isNotEmpty &&
+      failures.every((f) => f.contains('indirizzo non trovato') || f.contains('rete:') || f.contains('tempo scaduto'));
+  if (network) {
+    return 'Non riesco a raggiungere YouTube: controlla la connessione, e se usi un DNS privato, '
+        'una VPN o un blocco pubblicità prova a spegnerlo ($details)';
+  }
+  if (failures.any((f) => RegExp(r'\b403\b').hasMatch(f))) {
+    return 'YouTube ha rifiutato il download di questo brano. Riprova tra un po\', oppure usa '
+        '"Con il server" nelle Impostazioni ($details)';
+  }
+  return 'YouTube non ha dato l\'audio del brano ($details)';
 }
 
 /// I flussi solo audio con link diretto della risposta `player`. Le versioni doppiate in
