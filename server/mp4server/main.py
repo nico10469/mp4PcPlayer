@@ -28,15 +28,21 @@ class DownloadRequest(BaseModel):
     cover: str | None = None
     album: str | None = None
     album_artist: str | None = None
+    # Gli artisti principali e gli ospiti, dalla ricerca su YouTube Music.
+    artists: list[str] | None = None
 
     def hints(self) -> dict:
         cover = self.cover if self.cover and self.cover.startswith("https://") else None
-        return {"cover": cover, "album": self.album, "album_artist": self.album_artist}
+        return {"cover": cover, "album": self.album, "album_artist": self.album_artist, "artists": self.artists}
 
 
 def create_app(library_dir: Path | None = None, token: str | None = None, fetch=None, music_client=None) -> FastAPI:
     library = Library(library_dir or Path(os.environ.get("MP4_LIBRARY", "library")))
-    downloader = dl.Downloader(library, fetch=fetch or dl.default_fetch)
+    downloader = dl.Downloader(
+        library,
+        fetch=fetch or dl.default_fetch,
+        artist_lookup=lambda video_id: music.song_artists(video_id, music_client),
+    )
     token = token if token is not None else os.environ.get("MP4_TOKEN")
 
     def check_token(authorization: str | None = Header(default=None)) -> None:
@@ -80,6 +86,16 @@ def create_app(library_dir: Path | None = None, token: str | None = None, fetch=
             return await run_in_threadpool(music.collection, source, music_client)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Album o playlist non disponibile: {exc}")
+
+    @app.get("/artist")
+    async def artist(name: str = Query(min_length=1)) -> dict:
+        """Album, singoli ed EP di un artista su YouTube Music."""
+        try:
+            return await run_in_threadpool(music.discography, name, music_client)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Discografia non disponibile: {exc}")
 
     @app.post("/downloads", status_code=202)
     def start_download(req: DownloadRequest) -> dict:

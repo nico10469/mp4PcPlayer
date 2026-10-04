@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../services/server_api.dart';
+import '../services/settings.dart';
 import '../services/storage_access.dart';
 import 'app_scope.dart';
 import 'theme.dart';
@@ -186,6 +187,82 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _downloadSection() {
+    final settings = AppScope.of(context).settings;
+    final mode = settings.downloadMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('DOWNLOAD', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        const SizedBox(height: 8),
+        SegmentedButton<DownloadMode>(
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: AppColors.accent,
+            selectedForegroundColor: Colors.white,
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: AppColors.divider),
+          ),
+          segments: const [
+            ButtonSegment(value: DownloadMode.device, label: Text('Nell\'app'), icon: Icon(Icons.phone_iphone)),
+            ButtonSegment(value: DownloadMode.server, label: Text('Con il server'), icon: Icon(Icons.dns)),
+          ],
+          selected: {mode},
+          onSelectionChanged: (s) => settings.setDownloadMode(s.first),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          mode == DownloadMode.device
+              ? 'La musica si cerca su YouTube Music e si scarica direttamente su questo dispositivo, '
+                    'senza bisogno del server. Se un giorno YouTube cambia qualcosa e i download smettono '
+                    'di funzionare, aggiorna l\'app o usa il server.'
+              : 'Il server scarica con yt-dlp e manda i brani all\'app. Si aggiorna senza cambiare l\'app.',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        if (mode == DownloadMode.server) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: _url,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Indirizzo', hintText: 'http://IP-DEL-PC:8000'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _token,
+            obscureText: true,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Token (facoltativo)'),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _testing ? null : _saveAndTest,
+            child: Text(_testing ? 'Verifica in corso…' : 'Salva e prova la connessione'),
+          ),
+          if (_status != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  _ok ? Icons.check_circle : Icons.error_outline,
+                  color: _ok ? Colors.greenAccent : AppColors.accent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_status!)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 24),
+          const Text(
+            'Il server è il programma Python nella cartella "server" del progetto: tienilo acceso su un PC '
+            'o un Raspberry Pi. I brani già scaricati si ascoltano anche senza server.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LargeTitlePage(
@@ -198,45 +275,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               ListenableBuilder(listenable: AppScope.of(context).library, builder: (context, _) => _folderSection()),
               const SizedBox(height: 32),
-              const Text('SERVER DI DOWNLOAD', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _url,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                decoration: const InputDecoration(labelText: 'Indirizzo', hintText: 'http://IP-DEL-PC:8000'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _token,
-                obscureText: true,
-                autocorrect: false,
-                decoration: const InputDecoration(labelText: 'Token (facoltativo)'),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _testing ? null : _saveAndTest,
-                child: Text(_testing ? 'Verifica in corso…' : 'Salva e prova la connessione'),
-              ),
-              if (_status != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      _ok ? Icons.check_circle : Icons.error_outline,
-                      color: _ok ? Colors.greenAccent : AppColors.accent,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_status!)),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 24),
-              const Text(
-                'Il server è il programma Python nella cartella "server" del progetto: tienilo acceso su un PC '
-                'o un Raspberry Pi. I brani già scaricati si ascoltano anche senza server.',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
+              ListenableBuilder(listenable: AppScope.of(context).settings, builder: (context, _) => _downloadSection()),
               const SizedBox(height: 40),
               const Center(child: AppLogo(size: 96)),
               const SizedBox(height: 8),

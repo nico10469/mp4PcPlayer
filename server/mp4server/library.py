@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Callable
 
 
 @dataclass
@@ -24,6 +26,8 @@ class Track:
     genre: str | None = None
     year: int | None = None
     source_url: str | None = None
+    # Gli artisti uno per uno: solo i principali e gli ospiti (feat.), senza autori e produttori.
+    artists: list[str] | None = None
 
     def to_json(self) -> dict:
         data = asdict(self)
@@ -102,13 +106,57 @@ def _genre(info: dict) -> str | None:
     return genres[0] if genres else None
 
 
-def track_from_info(info: dict, filename: str) -> Track:
+def featured_in_title(title: str) -> list[str]:
+    """Gli ospiti scritti nel titolo: "Brano (feat. A & B)", "Brano ft. A, B"."""
+    match = re.search(r"\b(?:feat\.?|ft\.?|featuring)\s+([^()\[\]]+)", title or "", re.I)
+    if not match:
+        return []
+    names = re.split(r",|&| and | e | x ", match.group(1), flags=re.I)
+    return [n.strip() for n in names if n.strip()]
+
+
+def credited_artists(info: dict) -> list[str]:
+    """Gli artisti che yt-dlp legge dalla descrizione ("Brano · A · B · C"): a volte ci sono
+    anche autori e produttori."""
+    artists = info.get("artists")
+    if isinstance(artists, list) and artists:
+        return [a for a in (str(x).strip() for x in artists) if a]
+    if info.get("artist"):
+        return [a.strip() for a in str(info["artist"]).split(",") if a.strip()]
+    channel = info.get("uploader") or info.get("channel") or ""
+    channel = channel.removesuffix(" - Topic").strip()
+    return [channel] if channel else []
+
+
+def main_artists(info: dict, lookup: Callable[[str], list[str]] | None = None) -> list[str]:
+    """Solo gli artisti più importanti: quelli che YouTube Music mostra per il brano
+    (principali e ospiti). Se YouTube Music non risponde: il primo artista più gli ospiti del titolo."""
+    credited = credited_artists(info)
+    if len(credited) <= 1:
+        return credited
+    if lookup is not None:
+        try:
+            found = lookup(info["id"])
+        except Exception:
+            found = []
+        if found:
+            return found
+    result = credited[:1]
+    title = info.get("track") or info.get("title") or ""
+    for name in featured_in_title(title):
+        if name.lower() not in (a.lower() for a in result):
+            result.append(name)
+    return result
+
+
+def track_from_info(info: dict, filename: str, lookup: Callable[[str], list[str]] | None = None) -> Track:
     """Costruisce un Track dai metadati restituiti da yt-dlp."""
+    artists = main_artists(info, lookup)
     return Track(
         id=info["id"],
         # Su YouTube Music yt-dlp riempie track/artist/album: sono più puliti del titolo del video.
         title=info.get("track") or info.get("title") or info["id"],
-        artist=info.get("artist") or info.get("uploader") or info.get("channel") or "Sconosciuto",
+        artist=", ".join(artists) or "Sconosciuto",
         album=info.get("album"),
         duration=info.get("duration"),
         thumbnail=info.get("thumbnail"),
@@ -118,16 +166,22 @@ def track_from_info(info: dict, filename: str) -> Track:
         genre=_genre(info),
         year=_year(info),
         source_url=info.get("webpage_url"),
+        artists=artists or None,
     )
 
 
 def apply_hints(track: Track, hints: dict) -> Track:
     """La copertina quadrata di YouTube Music vince sulla miniatura del video;
-    album e artista dell'album riempiono solo i campi che yt-dlp ha lasciato vuoti."""
+    album e artista dell'album riempiono solo i campi che yt-dlp ha lasciato vuoti.
+    Gli artisti della ricerca su YouTube Music sostituiscono quelli di yt-dlp."""
     if hints.get("cover"):
         track.thumbnail = hints["cover"]
     if hints.get("album") and not track.album:
         track.album = hints["album"]
     if hints.get("album_artist") and not track.album_artist:
         track.album_artist = hints["album_artist"]
+    artists = [a.strip() for a in hints.get("artists") or [] if isinstance(a, str) and a.strip()]
+    if artists:
+        track.artists = artists
+        track.artist = ", ".join(artists)
     return track

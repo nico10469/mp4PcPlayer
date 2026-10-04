@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/track.dart';
-import '../services/server_api.dart';
+import '../services/music_catalog.dart';
 import 'app_scope.dart';
 import 'download_page.dart';
 import 'theme.dart';
@@ -39,9 +39,9 @@ class _SearchPageState extends State<SearchPage> {
       _onlineQuery = q;
     });
     try {
-      final results = await AppScope.of(context).downloads.api.search(q);
+      final results = await AppScope.of(context).downloads.catalog.search(q);
       if (mounted && _onlineQuery == q) setState(() => _online = results);
-    } on ServerException catch (e) {
+    } on CatalogException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);

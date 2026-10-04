@@ -43,7 +43,7 @@ def test_download_flow(client, tmp_path):
         {"id": "2vjPBrBU-TM", "title": "Chandelier", "artist": "Sia", "album": None, "duration": 216,
          "thumbnail": "https://x/y.jpg", "added_at": tracks[0]["added_at"], "ext": "m4a",
          "album_artist": None, "genre": "Pop", "year": 2014,
-         "source_url": "https://www.youtube.com/watch?v=2vjPBrBU-TM"}
+         "source_url": "https://www.youtube.com/watch?v=2vjPBrBU-TM", "artists": ["Sia"]}
     ]
 
     f = client.get("/tracks/2vjPBrBU-TM/file", headers={"Range": "bytes=2-4"})
@@ -94,6 +94,10 @@ class FakeMusic:
         thumbs = [{"url": "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj"},
                   {"url": "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj"}]
         return {
+            "artists": [
+                {"resultType": "artist", "artist": "Sia Furler Tribute", "browseId": "UCother"},
+                {"resultType": "artist", "artist": "Sia", "browseId": "UCsia"},
+            ],
             "songs": [
                 {"resultType": "song", "title": "Chandelier", "videoId": "2vjPBrBU-TM", "artists": [{"name": "Sia", "id": "x"}],
                  "album": {"name": "1000 Forms of Fear", "id": "MPREb_1"}, "duration_seconds": 216, "thumbnails": thumbs,
@@ -109,6 +113,24 @@ class FakeMusic:
                  "browseId": "VLPL123456789", "thumbnails": thumbs},
             ],
         }[filter]
+
+    def get_watch_playlist(self, videoId, limit):
+        return {"tracks": [{"videoId": videoId, "title": "Get Lucky",
+                            "artists": [{"name": "Daft Punk"}, {"name": "Pharrell Williams"}, {"name": "Nile Rodgers"}]}]}
+
+    def get_artist(self, channel_id):
+        assert channel_id == "UCsia"
+        return {"name": "Sia", "thumbnails": [],
+                "albums": {"browseId": "UCsia", "params": "albums",
+                           "results": [{"title": "Solo il primo", "browseId": "MPREb_0", "year": "2010"}]},
+                "singles": {"browseId": None,
+                            "results": [{"title": "Snowman", "type": "Single", "year": "2017", "browseId": "MPREb_9"}]}}
+
+    def get_artist_albums(self, channel_id, params, limit):
+        assert (channel_id, params) == ("UCsia", "albums")
+        return [{"title": "1000 Forms of Fear", "type": "Album", "year": "2014", "browseId": "MPREb_1",
+                 "thumbnails": [{"url": "https://lh3.googleusercontent.com/a=w226-h226-l90-rj"}]},
+                {"title": "This Is Acting", "type": "Album", "year": "2016", "browseId": "MPREb_2"}]
 
     def get_album(self, browse_id):
         assert browse_id == "MPREb_1"
@@ -133,14 +155,16 @@ def music_client(tmp_path):
 
 def test_search_songs_from_youtube_music(music_client):
     assert music_client.get("/search", params={"q": "sia"}).json() == [
-        {"kind": "song", "id": "2vjPBrBU-TM", "title": "Chandelier", "artist": "Sia", "album": "1000 Forms of Fear",
+        {"kind": "song", "id": "2vjPBrBU-TM", "title": "Chandelier", "artist": "Sia", "artists": ["Sia"],
+         "album": "1000 Forms of Fear",
          "duration": 216, "thumbnail": "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj", "year": None}
     ]
 
 
 def test_search_albums_and_playlists(music_client):
     albums = music_client.get("/search", params={"q": "sia", "kind": "albums"}).json()
-    assert albums == [{"kind": "album", "id": "MPREb_1", "title": "1000 Forms of Fear", "artist": "Sia", "type": "Album",
+    assert albums == [{"kind": "album", "id": "MPREb_1", "title": "1000 Forms of Fear", "artist": "Sia",
+                       "artists": ["Sia"], "type": "Album",
                        "year": 2014, "thumbnail": "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj"}]
     playlists = music_client.get("/search", params={"q": "pop", "kind": "playlists"}).json()
     assert playlists[0]["id"] == "PL123456789" and playlists[0]["count"] == 50
@@ -196,3 +220,56 @@ def test_old_index_without_new_fields_loads(tmp_path):
     with TestClient(create_app(tmp_path, token="", fetch=fake_fetch)) as c:
         track = c.get("/tracks/abc").json()
     assert track["genre"] is None and track["year"] is None
+
+
+def featuring_fetch(url, out_dir: Path, on_progress):
+    """yt-dlp legge gli artisti dalla descrizione "Brano · A · B · C", autori e produttori compresi."""
+    video_id = url.rsplit("=", 1)[-1]
+    (out_dir / f"{video_id}.m4a").write_bytes(b"x")
+    info = {"id": video_id, "title": "Get Lucky (feat. Pharrell Williams and Nile Rodgers)",
+            "artists": ["Daft Punk", "Pharrell Williams", "Nile Rodgers", "Thomas Bangalter", "Guy-Manuel de Homem-Christo"],
+            "artist": "Daft Punk, Pharrell Williams, Nile Rodgers, Thomas Bangalter, Guy-Manuel de Homem-Christo"}
+    return info, f"{video_id}.m4a"
+
+
+def test_download_keeps_only_main_artists(tmp_path):
+    # Con i dati della ricerca vincono gli artisti di YouTube Music.
+    with TestClient(create_app(tmp_path / "a", token="", fetch=featuring_fetch, music_client=FakeMusic(fail=True))) as c:
+        wait_done(c, c.post("/downloads", json={"source": "5NV6Rdv1a3I", "artists": ["Daft Punk", "Pharrell Williams"]}).json()["id"])
+        track = c.get("/tracks/5NV6Rdv1a3I").json()
+    assert track["artists"] == ["Daft Punk", "Pharrell Williams"] and track["artist"] == "Daft Punk, Pharrell Williams"
+
+    # Un link senza dati: si chiedono a YouTube Music.
+    with TestClient(create_app(tmp_path / "b", token="", fetch=featuring_fetch, music_client=FakeMusic())) as c:
+        wait_done(c, c.post("/downloads", json={"source": "5NV6Rdv1a3I"}).json()["id"])
+        track = c.get("/tracks/5NV6Rdv1a3I").json()
+    assert track["artists"] == ["Daft Punk", "Pharrell Williams", "Nile Rodgers"]
+
+    # YouTube Music non risponde: il primo artista e gli ospiti scritti nel titolo.
+    class NoWatch(FakeMusic):
+        def get_watch_playlist(self, videoId, limit):
+            raise RuntimeError("offline")
+
+    with TestClient(create_app(tmp_path / "c", token="", fetch=featuring_fetch, music_client=NoWatch())) as c:
+        wait_done(c, c.post("/downloads", json={"source": "5NV6Rdv1a3I"}).json()["id"])
+        track = c.get("/tracks/5NV6Rdv1a3I").json()
+    assert track["artists"] == ["Daft Punk", "Pharrell Williams", "Nile Rodgers"]
+
+
+def test_artist_discography(music_client):
+    d = music_client.get("/artist", params={"name": "sia"}).json()
+    assert d["id"] == "UCsia" and d["name"] == "Sia"
+    # L'elenco completo degli album sostituisce i pochi della pagina dell'artista.
+    assert [(a["id"], a["title"], a["year"], a["type"]) for a in d["albums"]] == [
+        ("MPREb_1", "1000 Forms of Fear", 2014, "Album"), ("MPREb_2", "This Is Acting", 2016, "Album")]
+    assert d["albums"][0]["thumbnail"] == "https://lh3.googleusercontent.com/a=w544-h544-l90-rj"
+    assert [(s["id"], s["type"]) for s in d["singles"]] == [("MPREb_9", "Single")]
+
+
+def test_artist_not_found(tmp_path):
+    class NoArtists(FakeMusic):
+        def search(self, query, filter, limit):
+            return [] if filter == "artists" else super().search(query, filter, limit)
+
+    with TestClient(create_app(tmp_path, token="", fetch=fake_fetch, music_client=NoArtists())) as c:
+        assert c.get("/artist", params={"name": "nessuno"}).status_code == 404
