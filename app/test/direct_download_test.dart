@@ -598,4 +598,120 @@ void main() {
     expect(sent.single['artists'], ['Sia', 'Sean Paul']);
     expect(d, isA<Discography>());
   });
+
+  Map<String, dynamic> format(int itag, String mime, int bitrate, {String? url, Map<String, dynamic>? extra}) => {
+    'itag': itag,
+    'mimeType': mime,
+    'bitrate': bitrate,
+    'contentLength': '10',
+    if (url != null) 'url': url else 'signatureCipher': 's=abc&url=https://x',
+    ...?extra,
+  };
+
+  test('player response: AAC first, no dubbed or DRC copies, no ciphered links', () {
+    final data = {
+      'playabilityStatus': {'status': 'OK'},
+      'streamingData': {
+        'adaptiveFormats': [
+          format(137, 'video/mp4; codecs="avc1.640028"', 4000000, url: 'https://v/137'),
+          format(139, 'audio/mp4; codecs="mp4a.40.5"', 50000, url: 'https://a/139'),
+          format(140, 'audio/mp4; codecs="mp4a.40.2"', 130000, url: 'https://a/140'),
+          format(141, 'audio/mp4; codecs="mp4a.40.2"', 260000),
+          format(140, 'audio/mp4; codecs="mp4a.40.2"', 140000, url: 'https://a/140drc', extra: {'isDrc': true}),
+          format(
+            140,
+            'audio/mp4; codecs="mp4a.40.2"',
+            150000,
+            url: 'https://a/140es',
+            extra: {
+              'audioTrack': {'displayName': 'Spanish', 'audioIsDefault': false},
+            },
+          ),
+          format(251, 'audio/webm; codecs="opus"', 160000, url: 'https://a/251'),
+        ],
+      },
+    };
+    final streams = parsePlayer(data, userAgent: 'vr');
+    expect(streams.map((s) => s.url), ['https://a/139', 'https://a/140', 'https://a/251']);
+    expect(pickAudio(streams)!.url, 'https://a/140');
+    expect(pickAudio(streams)!.ext, 'm4a');
+    expect(pickAudio(streams)!.userAgent, 'vr');
+    final opus = streams.where((s) => !s.isAac).toList();
+    expect(pickAudio(opus)!.ext, 'webm');
+    expect(pickAudio(opus, iosOnly: true), isNull);
+  });
+
+  test('downloads the audio itself: Quest client, visitor id retry, file in pieces', () async {
+    final audio = List<int>.generate(10, (i) => i);
+    final players = <Map<String, dynamic>>[];
+    final ranges = <String>[];
+    final client = MockClient((req) async {
+      if (req.url.path.endsWith('/player')) {
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        players.add({...body, 'header': req.headers['X-Goog-Visitor-Id']});
+        final client = body['context']['client'] as Map<String, dynamic>;
+        expect(req.headers['User-Agent'], contains('vr.oculus'));
+        if (client['visitorData'] == null) {
+          return http.Response(
+            jsonEncode({
+              'playabilityStatus': {'status': 'LOGIN_REQUIRED', 'reason': 'Sign in to confirm you are not a bot'},
+              'responseContext': {'visitorData': 'CgtWSVNJVE9S'},
+            }),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'playabilityStatus': {'status': 'OK'},
+            'streamingData': {
+              'adaptiveFormats': [format(140, 'audio/mp4; codecs="mp4a.40.2"', 130000, url: 'https://gv/140')],
+            },
+          }),
+          200,
+        );
+      }
+      expect(req.url.toString(), 'https://gv/140');
+      expect(req.headers['User-Agent'], contains('vr.oculus'));
+      final range = req.headers['Range']!;
+      ranges.add(range);
+      final m = RegExp(r'bytes=(\d+)-(\d+)').firstMatch(range)!;
+      final a = int.parse(m.group(1)!), b = int.parse(m.group(2)!);
+      return http.Response.bytes(audio.sublist(a, b + 1), 206);
+    });
+    final fetcher = YoutubeAudioFetcher(client: client, chunkSize: 4, iosOnly: true);
+    final progress = <double>[];
+    final file = await fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/song.$ext'), onProgress: progress.add);
+
+    expect(file.path, endsWith('song.m4a'));
+    expect(file.readAsBytesSync(), audio);
+    expect(File('${file.path}.part').existsSync(), isFalse);
+    expect(ranges, ['bytes=0-3', 'bytes=4-7', 'bytes=8-9']);
+    expect(progress.last, 1.0);
+    expect(players, hasLength(2));
+    expect(players.first['context']['client']['clientName'], 'ANDROID_VR');
+    expect(players.last['context']['client']['visitorData'], 'CgtWSVNJVE9S');
+    expect(players.last['header'], 'CgtWSVNJVE9S');
+  });
+
+  test('if YouTube refuses the first client, the next one is tried', () async {
+    final versions = <String>[];
+    final client = MockClient((req) async {
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      final version = body['context']['client']['clientVersion'] as String;
+      versions.add(version);
+      if (version == PlayerClient.androidVr.version) return http.Response('{}', 403);
+      return http.Response(
+        jsonEncode({
+          'playabilityStatus': {'status': 'OK'},
+          'streamingData': {
+            'adaptiveFormats': [format(251, 'audio/webm; codecs="opus"', 160000, url: 'https://gv/251')],
+          },
+        }),
+        200,
+      );
+    });
+    final streams = await YoutubeAudioFetcher(client: client).streams('dQw4w9WgXcQ');
+    expect(streams.single.itag, 251);
+    expect(versions, [PlayerClient.androidVr.version, PlayerClient.androidVrOld.version]);
+  });
 }

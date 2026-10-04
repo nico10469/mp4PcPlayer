@@ -27,7 +27,7 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 - **Playlists:** you can create a playlist with its own cover image, description and songs, sort your playlists and search them. Each song has a menu with remove from playlist, delete, add to playlist, play next, show artist, favorite and track info.
 - **Artists:** every artist in your library. Songs downloaded from v0.4.0 keep only the main artists and the featured guests (no producers or writers), and a song with a guest shows up under both. An artist's page shows the 5 songs you play most, with how many times you played them, then all of the artist's albums and singles from YouTube Music (the ones you already have say "In libreria"; the others open to be downloaded). Offline it shows the albums in your library.
 - **Search:** it searches your library as you type. Press Enter to search YouTube too and download from the results.
-- **Player:** the full-screen player takes the dominant color of the cover. The heart adds the song to your Favorites, and the "…" button shows the track's metadata (artist, album, genre, year, duration, format, source).
+- **Player:** the full-screen player takes the dominant color of the cover. Tap an artist's name under the title to open their page. The heart adds the song to your Favorites, and the "…" button shows the track's metadata (artist, album, genre, year, duration, format, source).
 - **Edit metadata:** in the track info, "Modifica" lets you change the cover (pick any image), title, artist, album, album artist, genre, year and lyrics.
 - **Lyrics:** the track info shows the lyrics in their original language. They come from the file's tags when present, otherwise from [LRCLIB](https://lrclib.net), a free lyrics archive, and are saved with the song.
 - **Favorites:** the songs you like go in a special "Preferiti" folder with a purple heart on a lilac background, next to your playlists. The files are not duplicated.
@@ -39,7 +39,7 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 
 There are two ways to download, chosen in Settings:
 
-- **In the app** (default on Android and iPhone): the app talks to YouTube Music directly and downloads the audio with [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart). Nothing else to install. When YouTube changes something, downloads may stop until a new version of the app comes out.
+- **In the app** (default on Android and iPhone): the app talks to YouTube Music directly and downloads the audio itself, asking YouTube for an audio-only link with the same client yt-dlp uses (the Quest VR app) and fetching it in 10 MB pieces; [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) is the fallback. Nothing else to install. When YouTube changes something, downloads may stop until a new version of the app comes out.
 - **With the server** (default on PC):
 
 ```

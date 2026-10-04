@@ -12,6 +12,7 @@ import 'package:mp4player/services/lyrics_service.dart';
 import 'package:mp4player/services/playlist_store.dart';
 import 'package:mp4player/services/settings.dart';
 import 'package:mp4player/services/yt_music.dart';
+import 'package:mp4player/ui/now_playing_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'direct_download_test.dart' show fakeYtMusic, FakeAudio;
@@ -260,5 +261,52 @@ void main() {
     await tester.tap(find.text('Homework'));
     await tester.pumpAndSettle();
     expect(find.byType(CollectionPage), findsOneWidget);
+  });
+
+  testWidgets('in the player, tapping an artist name opens that artist', (tester) async {
+    final (library, playlists, settings) = await _setUp(tester, dir, prefs: {'download_mode': 'device'});
+    final track = Track(
+      id: 's4',
+      title: 'Get Lucky',
+      artist: 'Daft Punk, Pharrell Williams',
+      artists: const ['Daft Punk', 'Pharrell Williams'],
+      album: 'Random Access Memories',
+      fileName: 's4.m4a',
+      addedAt: DateTime(2026, 10, 1),
+    );
+    await tester.runAsync(() async {
+      File('${dir.path}/s4.m4a').writeAsBytesSync([1]);
+      await library.add(track);
+    });
+    await tester.pumpWidget(
+      Mp4PlayerApp(
+        settings: settings,
+        library: library,
+        playlists: playlists,
+        music: YtMusicClient(client: fakeYtMusic()),
+        audio: FakeAudio(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // La stessa riga del player, "Daft Punk, Pharrell Williams — Random Access Memories".
+    tester
+        .state<NavigatorState>(find.byType(Navigator).first)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              body: Center(
+                child: ArtistLine(track: track, color: Colors.white),
+              ),
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(find.byType(ArtistLine), findsOneWidget);
+    expect(find.text('Daft Punk, Pharrell Williams — Random Access Memories', findRichText: true), findsOneWidget);
+
+    await tester.tapOnText(find.textRange.ofSubstring('Daft Punk'));
+    await tester.pumpAndSettle();
+    expect(find.text('I più ascoltati'), findsOneWidget);
+    expect(find.text('Daft Punk'), findsWidgets);
   });
 }
