@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app_scope.dart';
 import 'cover.dart';
+import 'l10n.dart';
 import 'now_playing_page.dart';
 import 'theme.dart';
 
-const _barColor = Color(0xFF3A3A3C);
 const _barHeight = 64.0;
 
 /// La barra in basso (terza immagine del mockup): libreria a sinistra,
@@ -23,15 +23,19 @@ class BottomBar extends StatelessWidget {
     return Stack(
       children: [
         // Sfuma il contenuto che scorre sotto la barra, lasciando passare i tocchi fuori dai pulsanti.
-        const Positioned.fill(
+        Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x00000000), Color(0xE6000000), Color(0xFF000000)],
-                  stops: [0, 0.45, 1],
+                  colors: [
+                    AppColors.background.withValues(alpha: 0),
+                    AppColors.background.withValues(alpha: 0.9),
+                    AppColors.background,
+                  ],
+                  stops: const [0, 0.45, 1],
                 ),
               ),
             ),
@@ -49,9 +53,9 @@ class BottomBar extends StatelessWidget {
                 child: Row(
                   children: [
                     _RoundButton(
-                      tooltip: 'Libreria',
+                      tooltip: tr('Libreria'),
                       icon: Icons.library_music,
-                      color: tab == 0 ? Colors.white : const Color(0xFFD1D1D6),
+                      color: tab == 0 ? AppColors.text : AppColors.barText,
                       selected: tab == 0,
                       onPressed: onLibrary,
                     ),
@@ -59,7 +63,7 @@ class BottomBar extends StatelessWidget {
                     const Expanded(child: MiniPlayer()),
                     const SizedBox(width: 10),
                     _RoundButton(
-                      tooltip: 'Cerca',
+                      tooltip: tr('Cerca'),
                       icon: Icons.search,
                       color: AppColors.accent,
                       selected: tab == 1,
@@ -96,10 +100,12 @@ class _RoundButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: _barColor,
-        shape: CircleBorder(side: BorderSide(color: selected ? const Color(0x66FFFFFF) : Colors.transparent)),
+        color: AppColors.bar,
+        shape: CircleBorder(
+          side: BorderSide(color: selected ? AppColors.text.withValues(alpha: 0.4) : Colors.transparent),
+        ),
         elevation: 6,
-        shadowColor: Colors.black,
+        shadowColor: AppColors.isDark ? Colors.black : Colors.black38,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onPressed,
@@ -114,8 +120,11 @@ class _RoundButton extends StatelessWidget {
 }
 
 /// Il pulsante lungo centrale: copertina, titolo, artista e play/pausa. Toccandolo si apre il player.
+/// Con [skipButtons] ci sono anche "precedente" e "successivo" (la barra del computer).
 class MiniPlayer extends StatelessWidget {
-  const MiniPlayer({super.key});
+  const MiniPlayer({super.key, this.skipButtons = false});
+
+  final bool skipButtons;
 
   @override
   Widget build(BuildContext context) {
@@ -124,11 +133,19 @@ class MiniPlayer extends StatelessWidget {
       listenable: scope.player,
       builder: (context, _) {
         final track = scope.player.current;
+        IconButton control(String tooltip, IconData icon, VoidCallback onPressed, {double size = 34}) => IconButton(
+          tooltip: tooltip,
+          iconSize: size,
+          color: AppColors.text,
+          disabledColor: AppColors.textSecondary,
+          icon: Icon(icon),
+          onPressed: track == null ? null : onPressed,
+        );
         return Material(
-          color: _barColor,
+          color: AppColors.bar,
           shape: const StadiumBorder(),
           elevation: 6,
-          shadowColor: Colors.black,
+          shadowColor: AppColors.isDark ? Colors.black : Colors.black38,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: track == null ? null : () => openNowPlaying(context),
@@ -142,7 +159,7 @@ class MiniPlayer extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6E6E70),
+                            color: AppColors.surfaceHigh,
                             borderRadius: BorderRadius.circular(8),
                           ),
                         )
@@ -154,28 +171,27 @@ class MiniPlayer extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          track?.title ?? 'Non in riproduzione',
+                          track?.title ?? tr('Non in riproduzione'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          track?.artist ?? 'Scegli un brano dalla libreria',
+                          track?.artist ?? tr('Scegli un brano dalla libreria'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14, color: Color(0xFFD1D1D6)),
+                          style: TextStyle(fontSize: 14, color: AppColors.barText),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: scope.player.isPlaying ? 'Pausa' : 'Riproduci',
-                    iconSize: 34,
-                    color: Colors.white,
-                    disabledColor: const Color(0xFF8E8E93),
-                    icon: Icon(scope.player.isPlaying ? Icons.pause : Icons.play_arrow),
-                    onPressed: track == null ? null : scope.player.togglePlay,
+                  if (skipButtons) control(tr('Precedente'), Icons.fast_rewind, scope.player.previous, size: 28),
+                  control(
+                    scope.player.isPlaying ? tr('Pausa') : tr('Riproduci'),
+                    scope.player.isPlaying ? Icons.pause : Icons.play_arrow,
+                    scope.player.togglePlay,
                   ),
+                  if (skipButtons) control(tr('Successivo'), Icons.fast_forward, scope.player.next, size: 28),
                   const SizedBox(width: 8),
                 ],
               ),

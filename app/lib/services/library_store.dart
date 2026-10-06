@@ -95,6 +95,7 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<void> add(Track track) async {
+    _reserved.remove(track.fileName.toLowerCase());
     _tracks
       ..removeWhere((t) => t.id == track.id)
       ..add(track);
@@ -134,8 +135,13 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Nomi dati a download ancora in corso: il file non c'è ancora, ma il nome è già preso.
+  final Set<String> _reserved = {};
+
   /// Nome leggibile e non ancora usato per un nuovo file audio: "Artista - Titolo.m4a".
-  String newAudioName(String artist, String title, String ext) {
+  /// Con [reserve] il nome resta preso finché il brano non entra in libreria, così due
+  /// download in parallelo dello stesso titolo non scrivono sullo stesso file.
+  String newAudioName(String artist, String title, String ext, {bool reserve = false}) {
     var base = [artist, title].where((s) => s.trim().isNotEmpty).join(' - ');
     base = base.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').trim();
     base = base.replaceAll(RegExp(r'[. ]+$'), '');
@@ -143,11 +149,13 @@ class LibraryStore extends ChangeNotifier {
     if (base.isEmpty) base = 'Brano';
     final used = {
       for (final t in [..._tracks, ..._missing]) t.fileName.toLowerCase(),
+      ..._reserved,
     };
     var name = '$base.$ext';
     for (var i = 2; used.contains(name.toLowerCase()) || audioFileFor(name).existsSync(); i++) {
       name = '$base ($i).$ext';
     }
+    if (reserve) _reserved.add(name.toLowerCase());
     return name;
   }
 
@@ -281,7 +289,13 @@ class LibraryStore extends ChangeNotifier {
 
   void _sort() => _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
 
-  Future<void> _save() async {
+  Future<void> _lastSave = Future.value();
+
+  /// Le scritture vanno in fila: con più download insieme due salvataggi possono arrivare
+  /// nello stesso momento, e scriverebbero sullo stesso file temporaneo.
+  Future<void> _save() => _lastSave = _lastSave.catchError((_) {}).then((_) => _write());
+
+  Future<void> _write() async {
     final tmp = File('${_index.path}.tmp');
     await tmp.writeAsString(jsonEncode([..._tracks, ..._missing].map((t) => t.toJson()).toList()));
     await tmp.rename(_index.path);

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/track.dart';
@@ -82,16 +83,45 @@ class YtDlpAudioFetcher implements AudioFetcher {
   YtDlp get ytDlp => _ytDlp ??= YtDlp.instance;
   AudioFetcher get fallback => _fallback ??= YoutubeAudioFetcher();
 
+  /// L'aggiornamento automatico di yt-dlp, fatto al massimo una volta mentre l'app è aperta
+  /// (condiviso dai download in parallelo).
+  static Future<bool>? _autoUpdate;
+  static var _autoUpdateFinished = false;
+
+  @visibleForTesting
+  static void resetAutoUpdate() {
+    _autoUpdate = null;
+    _autoUpdateFinished = false;
+  }
+
+  /// true se vale la pena riprovare: yt-dlp è appena stato aggiornato. Chi arriva quando
+  /// l'aggiornamento è già finito non riprova, perché riceverebbe lo stesso rifiuto.
+  Future<bool> _updateOnce() {
+    if (_autoUpdateFinished) return Future.value(false);
+    return _autoUpdate ??= _update().whenComplete(() => _autoUpdateFinished = true);
+  }
+
   @override
   Future<File> fetch(String videoId, File Function(String ext) target, {void Function(double)? onProgress}) async {
     final tmp = await (_tempRoot ?? Directory.systemTemp).createTemp('ytdlp');
     try {
-      final String path;
+      final url = 'https://www.youtube.com/watch?v=$videoId';
+      String path;
       try {
-        path = await ytDlp.download('https://www.youtube.com/watch?v=$videoId', tmp, onProgress: onProgress);
+        path = await ytDlp.download(url, tmp, onProgress: onProgress);
       } on YtDlpException catch (e) {
         if (e.engineBroken) return await fallback.fetch(videoId, target, onProgress: onProgress);
-        throw CatalogException(ytDlpFailure(e.message));
+        // YouTube cambia spesso e un yt-dlp vecchio si vede rifiutare il download (403):
+        // si aggiorna da solo e riprova una volta. Se invece YouTube ci crede un bot, altre
+        // richieste peggiorerebbero il blocco.
+        if (!_isRefused(e.message) || !await _updateOnce()) {
+          throw CatalogException(ytDlpFailure(e.message));
+        }
+        try {
+          path = await ytDlp.download(url, tmp, onProgress: onProgress);
+        } on YtDlpException catch (e) {
+          throw CatalogException(ytDlpFailure(e.message));
+        }
       }
       final source = File(path);
       final dot = source.path.lastIndexOf('.');
@@ -109,6 +139,22 @@ class YtDlpAudioFetcher implements AudioFetcher {
     } finally {
       if (await tmp.exists()) await tmp.delete(recursive: true);
     }
+  }
+
+  /// true se c'era una versione nuova di yt-dlp e ora è installata.
+  Future<bool> _update() async {
+    try {
+      return (await ytDlp.update()).updated;
+    } catch (_) {
+      // Senza rete o senza risposta: resta l'errore del download.
+      return false;
+    }
+  }
+
+  static bool _isRefused(String error) {
+    final e = error.toLowerCase();
+    if (e.contains('not a bot') || e.contains('sign in to confirm') || e.contains('429')) return false;
+    return e.contains('403') || e.contains('forbidden') || e.contains('requested format is not available');
   }
 
   @override

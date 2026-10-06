@@ -87,6 +87,36 @@ void main() {
     expect(file.readAsBytesSync(), [9]);
   });
 
+  test('a 403 updates yt-dlp by itself, once, and tries again', () async {
+    YtDlpAudioFetcher.resetAutoUpdate();
+    final calls = <String>[];
+    var updated = false;
+    fakeNative((call) async {
+      calls.add(call.method);
+      if (call.method == 'update') {
+        updated = true;
+        return {'updated': true, 'version': 'yt-dlp 2026.09.30'};
+      }
+      if (!updated) throw PlatformException(code: 'ytdlp', message: 'HTTP Error 403: Forbidden');
+      final args = Map<String, Object?>.from(call.arguments as Map);
+      return (File('${args['dir']}/audio.m4a')..writeAsBytesSync([5])).path;
+    });
+    final fetcher = YtDlpAudioFetcher(ytDlp: YtDlp(), fallback: FallbackAudio(), tempRoot: dir);
+    final file = await fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/a.$ext'));
+    expect(file.readAsBytesSync(), [5]);
+    expect(calls, ['download', 'update', 'download']);
+
+    // Aggiornato una volta: al 403 seguente non si riaggiorna.
+    updated = false;
+    calls.clear();
+    await expectLater(
+      fetcher.fetch('dQw4w9WgXcQ', (ext) => File('${dir.path}/b.$ext')),
+      throwsA(isA<CatalogException>().having((e) => e.message, 'message', contains('403'))),
+    );
+    expect(calls, ['download']);
+    YtDlpAudioFetcher.resetAutoUpdate();
+  });
+
   testWidgets('settings: shows the yt-dlp version and updates it', (tester) async {
     var version = 'yt-dlp 2025.11.12';
     fakeNative((call) async {

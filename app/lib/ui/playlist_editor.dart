@@ -7,6 +7,7 @@ import '../models/playlist.dart';
 import '../models/track.dart';
 import 'app_scope.dart';
 import 'cover.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -41,7 +42,7 @@ Future<Playlist?> showPlaylistEditor(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF282828),
+    backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
     builder: (_) => FractionallySizedBox(
       heightFactor: 0.94,
@@ -75,7 +76,7 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
   }
 
   Future<void> _pickCover() async {
-    final picked = await FilePicker.pickFile(type: FileType.image, dialogTitle: 'Scegli la copertina');
+    final picked = await FilePicker.pickFile(type: FileType.image, dialogTitle: tr('Scegli la copertina'));
     final path = picked?.path;
     if (path != null && mounted) setState(() => _cover = File(path));
   }
@@ -119,15 +120,15 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Row(
             children: [
-              TextAction(label: 'Annulla', onPressed: () => Navigator.pop(context)),
+              TextAction(label: tr('Annulla'), onPressed: () => Navigator.pop(context)),
               Expanded(
                 child: Text(
-                  existing == null ? 'Nuova playlist' : 'Modifica playlist',
+                  existing == null ? tr('Nuova playlist') : tr('Modifica playlist'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
-              TextAction(label: 'Fine', onPressed: _saving ? null : _done),
+              TextAction(label: tr('Fine'), onPressed: _saving ? null : _done),
             ],
           ),
         ),
@@ -146,13 +147,12 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
                         size: 240,
                         radius: 8,
                         placeholderIcon: Icons.queue_music,
-                        placeholderColor: const Color(0xFF6E6E70),
                       ),
                       Container(
                         width: 48,
                         height: 48,
-                        decoration: const BoxDecoration(color: Color(0xFFE5E5EA), shape: BoxShape.circle),
-                        child: const Icon(Icons.photo_camera, color: Color(0xFF3A3A3C)),
+                        decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
+                        child: Icon(Icons.photo_camera, color: AppColors.text),
                       ),
                     ],
                   ),
@@ -164,8 +164,8 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
                 textAlign: TextAlign.center,
                 autofocus: existing == null,
                 style: const TextStyle(fontSize: 18),
-                decoration: const InputDecoration(
-                  hintText: 'Nome playlist',
+                decoration: InputDecoration(
+                  hintText: tr('Nome playlist'),
                   filled: false,
                   border: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.divider)),
                   enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.divider)),
@@ -175,8 +175,8 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
               TextField(
                 controller: _description,
                 maxLines: null,
-                decoration: const InputDecoration(
-                  hintText: 'Descrizione',
+                decoration: InputDecoration(
+                  hintText: tr('Descrizione'),
                   filled: false,
                   border: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.divider)),
                   enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.divider)),
@@ -186,7 +186,7 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.add_circle, color: Color(0xFF30D158)),
-                title: const Text('Aggiungi musica', style: TextStyle(color: AppColors.accent)),
+                title: Text(tr('Aggiungi musica'), style: const TextStyle(color: AppColors.accent)),
                 onTap: _addMusic,
               ),
               for (final t in tracks)
@@ -250,23 +250,23 @@ class _TrackPickerState extends State<_TrackPicker> {
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Row(
             children: [
-              TextAction(label: 'Annulla', onPressed: () => Navigator.pop(context)),
-              const Expanded(
+              TextAction(label: tr('Annulla'), onPressed: () => Navigator.pop(context)),
+              Expanded(
                 child: Text(
-                  'Aggiungi musica',
+                  tr('Aggiungi musica'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
-              TextAction(label: 'Fine', onPressed: () => Navigator.pop(context, _selected)),
+              TextAction(label: tr('Fine'), onPressed: () => Navigator.pop(context, _selected)),
             ],
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
-            decoration: const InputDecoration(
-              hintText: 'Cerca nella libreria',
+            decoration: InputDecoration(
+              hintText: tr('Cerca nella libreria'),
               prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
             ),
             onChanged: (v) => setState(() => _filter = v),
@@ -274,7 +274,7 @@ class _TrackPickerState extends State<_TrackPicker> {
         ),
         Expanded(
           child: tracks.isEmpty
-              ? const EmptyState(title: 'Nessun brano', message: 'Scarica qualcosa per aggiungerlo alle playlist.')
+              ? EmptyState(title: tr('Nessun brano'), message: tr('Scarica qualcosa per aggiungerlo alle playlist.'))
               : ListView.builder(
                   itemCount: tracks.length,
                   itemBuilder: (context, i) {

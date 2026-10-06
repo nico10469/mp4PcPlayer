@@ -4,6 +4,7 @@ import '../models/playlist.dart';
 import '../services/playlist_store.dart';
 import 'app_scope.dart';
 import 'favorites.dart';
+import 'l10n.dart';
 import 'playlist_editor.dart';
 import 'theme.dart';
 import 'track_tile.dart';
@@ -36,22 +37,22 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
         final q = _filter.toLowerCase();
         final shown = q.isEmpty ? all : all.where((p) => p.name.toLowerCase().contains(q)).toList();
         return LargeTitlePage(
-          title: 'Playlist',
-          backLabel: 'Libreria',
+          title: tr('Playlist'),
+          backLabel: tr('Libreria'),
           actions: [
             PopupMenuButton<PlaylistSort>(
               initialValue: _sort,
               color: AppColors.surfaceHigh,
               onSelected: (s) => setState(() => _sort = s),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: PlaylistSort.recent, child: Text('Modificate di recente')),
-                PopupMenuItem(value: PlaylistSort.name, child: Text('Nome')),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: PlaylistSort.recent, child: Text(tr('Modificate di recente'))),
+                PopupMenuItem(value: PlaylistSort.name, child: Text(tr('Nome'))),
               ],
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
-                  'Ordina',
-                  style: TextStyle(color: AppColors.accent, fontSize: 17, fontWeight: FontWeight.w700),
+                  tr('Ordina'),
+                  style: const TextStyle(color: AppColors.accent, fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -62,9 +63,9 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyState(
-                  title: 'Cerchi le tue playlist?',
-                  message: 'Le playlist che crei compaiono qui.',
-                  action: 'Nuova playlist',
+                  title: tr('Cerchi le tue playlist?'),
+                  message: tr('Le playlist che crei compaiono qui.'),
+                  action: tr('Nuova playlist'),
                   onAction: _create,
                 ),
               ),
@@ -73,8 +74,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Cerca nelle playlist',
+                    decoration: InputDecoration(
+                      hintText: tr('Cerca nelle playlist'),
                       prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                     ),
                     onChanged: (v) => setState(() => _filter = v),
@@ -89,17 +90,18 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                     decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(6)),
                     child: const Icon(Icons.add, color: AppColors.accent, size: 32),
                   ),
-                  title: const Text('Nuova playlist…', style: TextStyle(color: AppColors.accent, fontSize: 18)),
+                  title: Text(tr('Nuova playlist…'), style: const TextStyle(color: AppColors.accent, fontSize: 18)),
                   onTap: _create,
                 ),
               ),
-              if (q.isEmpty || 'preferiti'.contains(q)) SliverToBoxAdapter(child: _favoritesRow(context)),
+              if (q.isEmpty || tr('Preferiti').toLowerCase().contains(q))
+                SliverToBoxAdapter(child: _favoritesRow(context)),
               SliverList.builder(
                 itemCount: shown.length,
                 itemBuilder: (context, i) => _PlaylistRow(
                   cover: PlaylistCover(playlist: shown[i]),
                   title: Text(shown[i].name, style: const TextStyle(fontSize: 18)),
-                  subtitle: shown[i].trackIds.length == 1 ? '1 brano' : '${shown[i].trackIds.length} brani',
+                  subtitle: plural(shown[i].trackIds.length, '1 brano', '{n} brani'),
                   chevron: true,
                   onTap: () => openPlaylist(context, shown[i]),
                 ),
@@ -116,8 +118,8 @@ Widget _favoritesRow(BuildContext context) {
   final count = AppScope.of(context).playlists.favoriteTracks.length;
   return _PlaylistRow(
     cover: const FavoritesCover(),
-    title: const Text('Preferiti', style: TextStyle(fontSize: 18)),
-    subtitle: count == 1 ? '1 brano' : '$count brani',
+    title: Text(tr('Preferiti'), style: const TextStyle(fontSize: 18)),
+    subtitle: plural(count, '1 brano', '{n} brani'),
     chevron: true,
     onTap: () => openFavorites(context),
   );
@@ -145,7 +147,7 @@ class _PlaylistRow extends StatelessWidget {
             Expanded(
               child: Container(
                 height: 88,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   border: Border(bottom: BorderSide(color: AppColors.divider)),
                 ),
                 child: Row(
@@ -157,11 +159,11 @@ class _PlaylistRow extends StatelessWidget {
                         children: [
                           title,
                           if (subtitle != null)
-                            Text(subtitle!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                            Text(subtitle!, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                         ],
                       ),
                     ),
-                    if (chevron) const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                    if (chevron) Icon(Icons.chevron_right, color: AppColors.textSecondary),
                   ],
                 ),
               ),
@@ -206,10 +208,10 @@ class PlaylistPage extends StatelessWidget {
                 ),
                 actions: [
                   PopupMenuButton<String>(
-                    tooltip: 'Opzioni playlist',
+                    tooltip: tr('Opzioni playlist'),
                     color: AppColors.surfaceHigh,
                     icon: Container(
-                      decoration: const BoxDecoration(color: AppColors.surfaceHigh, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: AppColors.surfaceHigh, shape: BoxShape.circle),
                       padding: const EdgeInsets.all(4),
                       child: const Icon(Icons.more_horiz, color: AppColors.accent, size: 20),
                     ),
@@ -225,12 +227,12 @@ class PlaylistPage extends StatelessWidget {
                           await scope.playlists.delete(playlist);
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Modifica')),
-                      PopupMenuItem(value: 'add', child: Text('Aggiungi musica')),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(value: 'edit', child: Text(tr('Modifica'))),
+                      PopupMenuItem(value: 'add', child: Text(tr('Aggiungi musica'))),
                       PopupMenuItem(
                         value: 'delete',
-                        child: Text('Elimina playlist', style: TextStyle(color: AppColors.accent)),
+                        child: Text(tr('Elimina playlist'), style: const TextStyle(color: AppColors.accent)),
                       ),
                     ],
                   ),
@@ -251,14 +253,14 @@ class PlaylistPage extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         _updated(playlist.updatedAt),
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.5),
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.5),
                       ),
                       if (playlist.description.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
                           playlist.description,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textSecondary),
+                          style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -274,9 +276,9 @@ class PlaylistPage extends StatelessWidget {
               if (tracks.isEmpty)
                 SliverToBoxAdapter(
                   child: EmptyState(
-                    title: 'Playlist vuota',
-                    message: 'Aggiungi brani dalla tua libreria.',
-                    action: 'Aggiungi musica',
+                    title: tr('Playlist vuota'),
+                    message: tr('Aggiungi brani dalla tua libreria.'),
+                    action: tr('Aggiungi musica'),
                     onAction: () async {
                       final ids = await showTrackPicker(context);
                       if (ids != null && ids.isNotEmpty) await scope.playlists.addTracks(playlist, ids);
@@ -312,10 +314,10 @@ class PlaylistPage extends StatelessWidget {
     final now = DateTime.now();
     final days = DateTime(now.year, now.month, now.day).difference(DateTime(d.year, d.month, d.day)).inDays;
     return switch (days) {
-      <= 0 => 'AGGIORNATA OGGI',
-      1 => 'AGGIORNATA IERI',
-      < 7 => 'AGGIORNATA $days GIORNI FA',
-      _ => 'AGGIORNATA IL ${formatDate(d)}',
+      <= 0 => tr('AGGIORNATA OGGI'),
+      1 => tr('AGGIORNATA IERI'),
+      < 7 => tr('AGGIORNATA {n} GIORNI FA', {'n': days}),
+      _ => tr('AGGIORNATA IL {date}', {'date': formatDate(d)}),
     };
   }
 }

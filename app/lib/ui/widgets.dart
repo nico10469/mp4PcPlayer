@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'l10n.dart';
 import 'theme.dart';
 
 /// Il pulsante "‹ Libreria" in rosso in alto a sinistra delle pagine.
@@ -137,11 +138,11 @@ class PlayShuffleRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: PillButton(icon: Icons.play_arrow, label: 'Riproduci', onPressed: onPlay),
+          child: PillButton(icon: Icons.play_arrow, label: tr('Riproduci'), onPressed: onPlay),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: PillButton(icon: Icons.shuffle, label: 'Casuale', onPressed: onShuffle),
+          child: PillButton(icon: Icons.shuffle, label: tr('Casuale'), onPressed: onShuffle),
         ),
       ],
     );
@@ -225,7 +226,7 @@ class CarouselItem extends StatelessWidget {
               subtitle!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
         ],
       ),
@@ -258,7 +259,7 @@ class EmptyState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
           if (action != null) ...[
             const SizedBox(height: 14),
@@ -283,15 +284,22 @@ class EmptyState extends StatelessWidget {
 /// "3 brani, 12 minuti"
 String tracksSummary(int count, Duration total) {
   final minutes = (total.inSeconds / 60).round();
-  final songs = count == 1 ? '1 brano' : '$count brani';
+  final songs = plural(count, '1 brano', '{n} brani');
   if (minutes >= 60) {
     final h = minutes ~/ 60;
-    return '$songs, $h ${h == 1 ? 'ora' : 'ore'} e ${minutes % 60} minuti';
+    return tr('{songs}, {h} {hours} e {m} minuti', {
+      'songs': songs,
+      'h': h,
+      'hours': h == 1 ? tr('ora') : tr('ore'),
+      'm': minutes % 60,
+    });
   }
-  return '$songs, $minutes ${minutes == 1 ? 'minuto' : 'minuti'}';
+  return '$songs, ${plural(minutes, '1 minuto', '{n} minuti')}';
 }
 
-String formatDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+String formatDate(DateTime d) => appLanguage == AppLanguage.english
+    ? '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}'
+    : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
 /// Il logo di Carrots MP4 (la carota in pixel art), disegnato senza sfocare i pixel.
 class AppLogo extends StatelessWidget {

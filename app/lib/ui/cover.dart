@@ -23,7 +23,7 @@ class Cover extends StatelessWidget {
     this.size = 48,
     this.radius = 6,
     this.placeholderIcon = Icons.music_note,
-    this.placeholderColor = AppColors.textSecondary,
+    this.placeholderColor,
   });
 
   /// Copertina di un brano della libreria.
@@ -35,14 +35,16 @@ class Cover extends StatelessWidget {
   final double size;
   final double radius;
   final IconData placeholderIcon;
-  final Color placeholderColor;
+
+  /// Il colore della nota al posto della copertina (di solito il grigio del tema).
+  final Color? placeholderColor;
 
   @override
   Widget build(BuildContext context) {
     final placeholder = Container(
       color: AppColors.surfaceHigh,
       alignment: Alignment.center,
-      child: Icon(placeholderIcon, color: placeholderColor, size: size * 0.45),
+      child: Icon(placeholderIcon, color: placeholderColor ?? AppColors.textSecondary, size: size * 0.45),
     );
     Widget image = placeholder;
     final f = file;

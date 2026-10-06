@@ -9,6 +9,7 @@ import 'package:mp4player/services/direct_audio.dart';
 import 'package:mp4player/services/download_manager.dart';
 import 'package:mp4player/services/library_store.dart';
 import 'package:mp4player/services/music_catalog.dart';
+import 'package:mp4player/services/playlist_store.dart';
 import 'package:mp4player/services/server_api.dart';
 import 'package:mp4player/services/settings.dart';
 import 'package:mp4player/services/yt_music.dart';
@@ -413,6 +414,35 @@ class FakeAudio implements AudioFetcher {
   Future<SearchResult?> describe(String videoId) async => null;
 }
 
+/// Audio finto che tiene il conto di quanti download vanno insieme; [failOnce] fallisce la prima volta.
+class SlowAudio implements AudioFetcher {
+  SlowAudio({this.failOnce = const {}});
+
+  final Set<String> failOnce;
+  final fetched = <String>[];
+  var running = 0;
+  var peak = 0;
+
+  @override
+  Future<File> fetch(String videoId, File Function(String ext) target, {void Function(double)? onProgress}) async {
+    fetched.add(videoId);
+    running++;
+    peak = running > peak ? running : peak;
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      if (failOnce.remove(videoId)) throw CatalogException('rete caduta');
+      final f = target('m4a');
+      await f.writeAsBytes([1]);
+      return f;
+    } finally {
+      running--;
+    }
+  }
+
+  @override
+  Future<SearchResult?> describe(String videoId) async => null;
+}
+
 void main() {
   late Directory dir;
   setUp(() => dir = Directory.systemTemp.createTempSync('mp4direct'));
@@ -533,6 +563,51 @@ void main() {
     final reloaded = LibraryStore(dir);
     await reloaded.load();
     expect(reloaded.byId('5NV6Rdv1a3I')!.artists, ['Daft Punk', 'Pharrell Williams', 'Nile Rodgers']);
+  });
+
+  test('a playlist downloads 3 songs at a time, keeps its order and retries a failed song', () async {
+    final library = LibraryStore(dir);
+    await library.load();
+    final playlists = PlaylistStore(library);
+    await playlists.load();
+    // Id video di YouTube: 11 caratteri.
+    final ids = [for (var i = 0; i < 7; i++) 'song000000$i'];
+    final audio = SlowAudio(failOnce: {ids[2]});
+    final downloads = DownloadManager(
+      library: library,
+      playlists: playlists,
+      api: ServerApi(baseUrl: 'http://server', client: MockClient((req) async => fail('nessuna rete: $req'))),
+      mode: DownloadMode.device,
+      music: YtMusicClient(client: fakeYtMusic()),
+      audio: audio,
+      retryDelay: Duration.zero,
+    );
+    // Lo stesso brano due volte, e due brani con lo stesso titolo e artista.
+    final collection = Collection(
+      id: 'PLtest',
+      kind: ResultKind.playlist,
+      title: 'Mix',
+      artist: '',
+      tracks: [
+        for (final id in ids) SearchResult(id: id, title: id == ids[6] ? 'Song ${ids[5]}' : 'Song $id', artists: const ['A']),
+        SearchResult(id: ids[0], title: 'Song ${ids[0]}', artists: const ['A']),
+      ],
+    );
+
+    await downloads.downloadCollection(collection);
+    expect(audio.peak, 3);
+    // Il brano non riuscito è stato riprovato una volta in fondo; il doppione scaricato una volta sola.
+    expect(audio.fetched.where((id) => id == ids[2]).length, 2);
+    expect(audio.fetched.where((id) => id == ids[0]).length, 1);
+    final progress = downloads.collectionState('PLtest')!;
+    expect([progress.done, progress.failed, progress.total, progress.running], [7, 0, 7, false]);
+    expect(playlists.playlists.single.trackIds, ids);
+    // Stesso titolo e artista: due file diversi.
+    expect(library.byId(ids[5])!.fileName, isNot(library.byId(ids[6])!.fileName));
+
+    final reloaded = LibraryStore(dir);
+    await reloaded.load();
+    expect(reloaded.tracks.length, 7);
   });
 
   test('play counts add up and survive a reload; old songs keep their artist', () async {

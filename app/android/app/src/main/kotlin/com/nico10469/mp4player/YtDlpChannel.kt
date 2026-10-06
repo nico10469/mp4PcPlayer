@@ -88,6 +88,9 @@ class YtDlpChannel(context: Context, messenger: BinaryMessenger) {
             .addOption("--cache-dir", File(context.cacheDir, "yt-dlp-cache").absolutePath)
             // Se gli script per le sfide non sono già dentro yt-dlp, li prende da GitHub.
             .addOption("--remote-components", "ejs:github")
+        // Le nuove versioni di yt-dlp cercano solo deno: senza dirgli dov'è QuickJS (incluso
+        // nell'app) non risolvono le sfide di YouTube, e i download finiscono in "403 Forbidden".
+        quickJs()?.let { request.addOption("--js-runtimes", "quickjs:${it.absolutePath}") }
         YoutubeDL.getInstance().execute(request, id, false) { progress, _, _ ->
             if (progress >= 0) {
                 main.post { channel.invokeMethod("progress", mapOf("id" to id, "progress" to progress / 100.0)) }
@@ -98,6 +101,12 @@ class YtDlpChannel(context: Context, messenger: BinaryMessenger) {
             ?.maxByOrNull { it.length() }
             ?: throw IllegalStateException("yt-dlp non ha scritto nessun file")
         return file.absolutePath
+    }
+
+    /** Il programma QuickJS di youtubedl-android, estratto con le altre librerie native. */
+    private fun quickJs(): File? {
+        val dir = File(context.applicationInfo.nativeLibraryDir)
+        return listOf("libqjs.so", "libquickjs.so").map { File(dir, it) }.firstOrNull { it.isFile }
     }
 
     /** Di quello che scrive yt-dlp tiene la riga con l'errore, non tutto il resoconto. */

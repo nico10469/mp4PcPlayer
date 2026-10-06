@@ -7,7 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -16,8 +16,11 @@ import io.flutter.plugin.common.MethodChannel
  * nella cartella scelta nelle Impostazioni (canale "carrots/storage", vedi storage_access.dart).
  * - Android 11 e successivi: "Accesso a tutti i file" (pagina delle impostazioni di sistema).
  * - Android 10 e precedenti: il permesso "Archiviazione".
+ *
+ * È un'AudioServiceActivity (audio_service) perché la musica continui in background
+ * con la notifica: l'activity e il servizio di riproduzione condividono lo stesso motore Flutter.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
     private var pending: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
