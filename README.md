@@ -28,12 +28,17 @@ _The covers in the screenshots are placeholders generated for the demo. The app 
 - **Artists:** every artist in your library. Songs downloaded from v0.4.0 keep only the main artists and the featured guests (no producers or writers), and a song with a guest shows up under both. An artist's page shows the 5 songs you play most, with how many times you played them, then all of the artist's albums and singles from YouTube Music (the ones you already have say "In libreria"; the others open to be downloaded). Offline it shows the albums in your library.
 - **Search:** it searches your library as you type. Press Enter to search YouTube too and download from the results.
 - **Player:** the full-screen player takes the dominant color of the cover. Tap an artist's name under the title to open their page. The heart adds the song to your Favorites, and the "…" button shows the track's metadata (artist, album, genre, year, duration, format, source).
+- **Background playback:** on Android and iPhone the music keeps playing with the screen off, with controls in the notification, on the lock screen and on headphones/Bluetooth.
+- **Queue:** the queue button in the player shows what plays next: tap a song to jump to it, drag to reorder, swipe to remove. "Aggiungi in coda" in a song's menu adds it to the end. When you reopen the app it picks up from the same song and second (paused).
+- **Sleep timer, fade and equalizer:** the moon button in the player stops the music after 15–90 minutes or at the end of the song. In Settings > Riproduzione you can fade between songs (up to 12 seconds) and, on Android, use the equalizer.
+- **Light theme and English:** Settings > Aspetto switches between dark, light or the system theme, and between Italian, English or the system language.
+- **Computer layout:** in a wide window (900 pixels or more) the sections move to a sidebar and the player becomes a bar along the bottom, with previous/next buttons.
 - **Edit metadata:** in the track info, "Modifica" lets you change the cover (pick any image), title, artist, album, album artist, genre, year and lyrics.
 - **Lyrics:** the track info shows the lyrics in their original language. They come from the file's tags when present, otherwise from [LRCLIB](https://lrclib.net), a free lyrics archive, and are saved with the song.
 - **Favorites:** the songs you like go in a special "Preferiti" folder with a purple heart on a lilac background, next to your playlists. The files are not duplicated.
 - **Your music folder:** in Settings you can choose the folder where your songs are saved (on Android the app asks for "All files access" first). Your existing songs are moved there with readable names (`Artist - Title.m4a`), and any audio files already in that folder (mp3, m4a, flac, ogg...) are added to the library with their tags and covers. On iPhone the songs go in the app's folder, visible in the Files app.
 - **Download without a server:** on Android and iPhone the app searches YouTube Music and downloads the audio by itself, with no server (Settings > Download > "Nell'app"). On a PC the default is the server, which you can still pick on the phone too.
-- **Download:** it searches YouTube Music, so it shows the official audio tracks (just the album cover, no video) first. The Albums and Playlists tabs let you download a whole album or playlist in one tap; a downloaded playlist also becomes a playlist in the app. You can paste a YouTube or YouTube Music link to a song, an album or a playlist.
+- **Download:** it searches YouTube Music, so it shows the official audio tracks (just the album cover, no video) first. The Albums and Playlists tabs let you download a whole album or playlist in one tap; a downloaded playlist also becomes a playlist in the app. You can paste a YouTube or YouTube Music link to a song, an album or a playlist. Up to 3 songs download at the same time (the others wait with a clock icon), and the songs of an album or playlist that fail are retried once at the end.
 
 ## How it works
 
@@ -136,4 +141,5 @@ cd app && flutter analyze && flutter test
 ## Good to know
 
 - Downloading from YouTube is against its terms of service. This project is meant for personal use.
-- Background playback with lock-screen controls isn't there yet. It is the next step (`just_audio_background` / `audio_service`).
+- On Android, when YouTube refuses a download (403), the app updates yt-dlp by itself once and tries again. yt-dlp uses the QuickJS bundled in the APK to solve YouTube's JavaScript challenges (`--js-runtimes quickjs`).
+- Every text in the app goes through `tr()` in `app/lib/ui/l10n.dart`, with the Italian text as the key and the English translation in the `english` map. `test/l10n_test.dart` fails if a text has no translation.

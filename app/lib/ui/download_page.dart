@@ -5,10 +5,16 @@ import '../services/download_manager.dart';
 import '../services/music_catalog.dart';
 import 'app_scope.dart';
 import 'cover.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 final _youtubeLink = RegExp(r'^https?://([a-z0-9-]+\.)*(youtube\.com|youtu\.be)/', caseSensitive: false);
+
+/// Il messaggio alla fine di un download: riuscito, o perché non è andato.
+String downloadResult(Track? track, String? error) => track != null
+    ? tr('"{title}" aggiunto alla libreria', {'title': track.title})
+    : tr('Download fallito: {error}', {'error': error ?? ''});
 
 /// Un link a una playlist o a un album (list=... oppure /browse/MPREb...).
 bool isCollectionLink(String url) {
@@ -53,7 +59,7 @@ class _DownloadPageState extends State<DownloadPage> {
       final track = await downloads.download(query, source: query);
       if (!mounted) return;
       final state = downloads.stateOf(query);
-      _snack(track != null ? '"${track.title}" aggiunto alla libreria' : 'Download fallito: ${state?.error}');
+      _snack(downloadResult(track, state?.error));
       return;
     }
     _query = query;
@@ -84,8 +90,8 @@ class _DownloadPageState extends State<DownloadPage> {
   @override
   Widget build(BuildContext context) {
     return LargeTitlePage(
-      title: 'Scarica musica',
-      backLabel: 'Libreria',
+      title: tr('Scarica musica'),
+      backLabel: tr('Libreria'),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -95,8 +101,8 @@ class _DownloadPageState extends State<DownloadPage> {
               textInputAction: TextInputAction.search,
               onSubmitted: _submit,
               decoration: InputDecoration(
-                hintText: 'Brani, album, playlist o link YouTube',
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                hintText: tr('Brani, album, playlist o link YouTube'),
+                prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.arrow_forward, color: AppColors.accent),
                   onPressed: () => _submit(_controller.text),
@@ -113,13 +119,13 @@ class _DownloadPageState extends State<DownloadPage> {
               style: SegmentedButton.styleFrom(
                 selectedBackgroundColor: AppColors.accent,
                 selectedForegroundColor: Colors.white,
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: AppColors.divider),
+                foregroundColor: AppColors.text,
+                side: BorderSide(color: AppColors.divider),
               ),
-              segments: const [
-                ButtonSegment(value: ResultKind.song, label: Text('Brani')),
-                ButtonSegment(value: ResultKind.album, label: Text('Album')),
-                ButtonSegment(value: ResultKind.playlist, label: Text('Playlist')),
+              segments: [
+                ButtonSegment(value: ResultKind.song, label: Text(tr('Brani'))),
+                ButtonSegment(value: ResultKind.album, label: Text(tr('Album'))),
+                ButtonSegment(value: ResultKind.playlist, label: Text(tr('Playlist'))),
               ],
               selected: {_kind},
               onSelectionChanged: (s) {
@@ -147,12 +153,14 @@ class _DownloadPageState extends State<DownloadPage> {
             ),
           )
         else if (_results.isEmpty)
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.all(32),
+              padding: const EdgeInsets.all(32),
               child: Text(
-                'Cerca su YouTube Music: trovi i brani ufficiali (solo audio, con la copertina dell\'album), '
-                'gli album e le playlist da scaricare interi. Puoi anche incollare un link.',
+                tr(
+                  'Cerca su YouTube Music: trovi i brani ufficiali (solo audio, con la copertina dell\'album), '
+                  'gli album e le playlist da scaricare interi. Puoi anche incollare un link.',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textSecondary),
               ),
@@ -208,10 +216,7 @@ class YoutubeResultTile extends StatelessWidget {
             );
             final err = scope.downloads.stateOf(r.id)?.error;
             messenger.showSnackBar(
-              SnackBar(
-                content: Text(track != null ? '"${track.title}" aggiunto alla libreria' : 'Download fallito: $err'),
-                behavior: SnackBarBehavior.floating,
-              ),
+              SnackBar(content: Text(downloadResult(track, err)), behavior: SnackBarBehavior.floating),
             );
           },
         ),
@@ -230,16 +235,16 @@ class CollectionResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = result;
     final details = [
-      if (r.kind == ResultKind.album) r.type ?? 'Album' else 'Playlist',
+      if (r.kind == ResultKind.album) r.type ?? tr('Album') else tr('Playlist'),
       r.artist,
       if (r.year != null) '${r.year}',
-      if (r.count != null) '${r.count} brani',
+      if (r.count != null) plural(r.count!, '1 brano', '{n} brani'),
     ];
     return ListTile(
       leading: Cover(url: r.thumbnail, placeholderIcon: r.kind == ResultKind.album ? Icons.album : Icons.queue_music),
       title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(details.where((s) => s.isNotEmpty).join('  ·  '), maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+      trailing: Icon(Icons.chevron_right, color: AppColors.textSecondary),
       onTap: () => openCollection(context, r.id, preview: r),
     );
   }
@@ -373,13 +378,15 @@ class _DownloadAll extends StatelessWidget {
         final running = progress?.running ?? false;
         String label;
         if (running) {
-          label = 'Scaricati ${progress!.done} di ${progress.total}…';
+          label = tr('Scaricati {done} di {total}…', {'done': progress!.done, 'total': progress.total});
         } else if (c.tracks.isEmpty) {
-          label = 'Nessun brano disponibile';
+          label = tr('Nessun brano disponibile');
         } else if (missing == 0) {
-          label = 'Tutti i brani sono in libreria';
+          label = tr('Tutti i brani sono in libreria');
         } else {
-          label = missing == c.tracks.length ? 'Scarica tutto (${c.tracks.length})' : 'Scarica i $missing mancanti';
+          label = missing == c.tracks.length
+              ? tr('Scarica tutto ({n})', {'n': c.tracks.length})
+              : tr('Scarica i {n} mancanti', {'n': missing});
         }
         return Column(
           children: [
@@ -397,9 +404,10 @@ class _DownloadAll extends StatelessWidget {
                           content: Text(
                             [
                               c.kind == ResultKind.playlist
-                                  ? 'Playlist "${c.title}" salvata'
-                                  : '"${c.title}" scaricato',
-                              if ((p?.failed ?? 0) > 0) '${p!.failed} brani non disponibili',
+                                  ? tr('Playlist "{title}" salvata', {'title': c.title})
+                                  : tr('"{title}" scaricato', {'title': c.title}),
+                              if ((p?.failed ?? 0) > 0)
+                                plural(p!.failed, '1 brano non disponibile', '{n} brani non disponibili'),
                             ].join(' · '),
                           ),
                         ),
@@ -437,7 +445,13 @@ class _DownloadButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phase = state?.phase;
-    if (phase == DownloadPhase.server || phase == DownloadPhase.transfer) {
+    if (phase == DownloadPhase.queued) {
+      return Tooltip(
+        message: tr('In fila'),
+        child: Icon(Icons.schedule, color: AppColors.textSecondary, semanticLabel: tr('In fila')),
+      );
+    }
+    if (state?.isActive ?? false) {
       return SizedBox.square(
         dimension: 28,
         child: CircularProgressIndicator(
@@ -448,10 +462,10 @@ class _DownloadButton extends StatelessWidget {
       );
     }
     if (inLibrary) {
-      return const Icon(Icons.check_circle, color: AppColors.accent, semanticLabel: 'Già scaricato');
+      return Icon(Icons.check_circle, color: AppColors.accent, semanticLabel: tr('Già scaricato'));
     }
     return IconButton(
-      tooltip: phase == DownloadPhase.error ? 'Riprova' : 'Scarica',
+      tooltip: phase == DownloadPhase.error ? tr('Riprova') : tr('Scarica'),
       icon: Icon(
         phase == DownloadPhase.error ? Icons.refresh : Icons.download_for_offline_outlined,
         color: AppColors.accent,

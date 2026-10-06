@@ -5,6 +5,7 @@ import 'artists_page.dart';
 import 'cover.dart';
 import 'download_page.dart';
 import 'favorites.dart';
+import 'l10n.dart';
 import 'playlist_editor.dart';
 import 'playlists_page.dart';
 import 'settings_page.dart';
@@ -23,13 +24,7 @@ class LibraryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    final rows = [
-      (icon: Icons.queue_music, label: 'Playlist', page: const PlaylistsPage()),
-      (icon: Icons.mic, label: 'Artisti', page: const ArtistsPage()),
-      (icon: Icons.music_note, label: 'Brani', page: const SongsPage()),
-      (icon: Icons.arrow_circle_down, label: 'Download', page: const DownloadPage()),
-      (icon: Icons.settings, label: 'Impostazioni', page: const SettingsPage()),
-    ];
+    final rows = librarySections();
 
     return Scaffold(
       body: ListenableBuilder(
@@ -43,15 +38,18 @@ class LibraryPage extends StatelessWidget {
           return CustomScrollView(
             slivers: [
               const SliverAppBar(pinned: true, toolbarHeight: 48),
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('Libreria', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
+                        child: Text(
+                          tr('Libreria'),
+                          style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+                        ),
                       ),
-                      AppLogo(size: 40),
+                      const AppLogo(size: 40),
                     ],
                   ),
                 ),
@@ -65,14 +63,14 @@ class LibraryPage extends StatelessWidget {
               if (tracks.isEmpty)
                 SliverToBoxAdapter(
                   child: EmptyState(
-                    title: 'La tua libreria è vuota',
-                    message: 'I brani che scarichi compaiono qui.',
-                    action: 'Scarica musica',
+                    title: tr('La tua libreria è vuota'),
+                    message: tr('I brani che scarichi compaiono qui.'),
+                    action: tr('Scarica musica'),
                     onAction: () => _push(context, const DownloadPage()),
                   ),
                 )
               else ...[
-                const SliverToBoxAdapter(child: SectionTitle('Aggiunti di recente')),
+                SliverToBoxAdapter(child: SectionTitle(tr('Aggiunti di recente'))),
                 SliverToBoxAdapter(
                   child: CoverCarousel(
                     itemCount: recent.length,
@@ -87,8 +85,8 @@ class LibraryPage extends StatelessWidget {
                 if (favorites.isNotEmpty) ...[
                   SliverToBoxAdapter(
                     child: SectionTitle(
-                      'Preferiti',
-                      trailing: TextAction(label: 'Vedi tutti', onPressed: () => openFavorites(context)),
+                      tr('Preferiti'),
+                      trailing: TextAction(label: tr('Vedi tutti'), onPressed: () => openFavorites(context)),
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -106,10 +104,10 @@ class LibraryPage extends StatelessWidget {
               ],
               SliverToBoxAdapter(
                 child: SectionTitle(
-                  'Playlist',
+                  tr('Playlist'),
                   trailing: playlists.isEmpty
                       ? null
-                      : TextAction(label: 'Vedi tutte', onPressed: () => _push(context, const PlaylistsPage())),
+                      : TextAction(label: tr('Vedi tutte'), onPressed: () => _push(context, const PlaylistsPage())),
                 ),
               ),
               SliverToBoxAdapter(
@@ -120,8 +118,8 @@ class LibraryPage extends StatelessWidget {
                       final n = favorites.length;
                       return CarouselItem(
                         image: const FavoritesCover(size: 150),
-                        title: 'Preferiti',
-                        subtitle: n == 1 ? '1 brano' : '$n brani',
+                        title: tr('Preferiti'),
+                        subtitle: plural(n, '1 brano', '{n} brani'),
                         onTap: () => openFavorites(context),
                       );
                     }
@@ -136,8 +134,8 @@ class LibraryPage extends StatelessWidget {
                           ),
                           child: const Icon(Icons.add, color: AppColors.accent, size: 48),
                         ),
-                        title: 'Nuova playlist',
-                        subtitle: 'Crea',
+                        title: tr('Nuova playlist'),
+                        subtitle: tr('Crea'),
                         onTap: () async {
                           final created = await showPlaylistEditor(context);
                           if (created != null && context.mounted) openPlaylist(context, created);
@@ -148,7 +146,7 @@ class LibraryPage extends StatelessWidget {
                     return CarouselItem(
                       image: PlaylistCover(playlist: p, size: 150),
                       title: p.name,
-                      subtitle: p.trackIds.length == 1 ? '1 brano' : '${p.trackIds.length} brani',
+                      subtitle: plural(p.trackIds.length, '1 brano', '{n} brani'),
                       onTap: () => openPlaylist(context, p),
                     );
                   },
@@ -178,7 +176,7 @@ class _LibraryRow extends StatelessWidget {
         padding: const EdgeInsets.only(left: 20),
         child: Container(
           height: 52,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
           ),
           child: Row(
@@ -188,7 +186,7 @@ class _LibraryRow extends StatelessWidget {
               Expanded(
                 child: Text(label, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w500)),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+              Icon(Icons.chevron_right, color: AppColors.textSecondary),
               const SizedBox(width: 12),
             ],
           ),
@@ -197,3 +195,12 @@ class _LibraryRow extends StatelessWidget {
     );
   }
 }
+
+/// Le voci della Libreria (e della barra laterale sul computer).
+List<({IconData icon, String label, Widget page})> librarySections() => [
+  (icon: Icons.queue_music, label: tr('Playlist'), page: const PlaylistsPage()),
+  (icon: Icons.mic, label: tr('Artisti'), page: const ArtistsPage()),
+  (icon: Icons.music_note, label: tr('Brani'), page: const SongsPage()),
+  (icon: Icons.arrow_circle_down, label: tr('Download'), page: const DownloadPage()),
+  (icon: Icons.settings, label: tr('Impostazioni'), page: const SettingsPage()),
+];

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../models/track.dart';
 import 'app_scope.dart';
 import 'cover.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -73,14 +74,14 @@ class _TrackInfoState extends State<_TrackInfo> {
       // Un testo scritto a mano nel frattempo non si sovrascrive.
       if (current.lyrics == null || current.lyrics!.isEmpty) await scope.library.update(current.copyWith(lyrics: text));
     } catch (_) {
-      _lyricsError = 'Non riesco a raggiungere LRCLIB: controlla la connessione a internet.';
+      _lyricsError = tr('Non riesco a raggiungere LRCLIB: controlla la connessione a internet.');
     } finally {
       if (mounted) setState(() => _searchingLyrics = false);
     }
   }
 
   Future<void> _changeCover(AppScope scope, Track t) async {
-    final picked = await FilePicker.pickFile(type: FileType.image, dialogTitle: 'Scegli la copertina');
+    final picked = await FilePicker.pickFile(type: FileType.image, dialogTitle: tr('Scegli la copertina'));
     final path = picked?.path;
     if (path != null) await scope.library.setCover(t, File(path));
   }
@@ -141,7 +142,7 @@ class _TrackInfoState extends State<_TrackInfo> {
               children: [
                 if (_editing)
                   Tooltip(
-                    message: 'Cambia copertina',
+                    message: tr('Cambia copertina'),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () => _changeCover(scope, t),
@@ -175,14 +176,14 @@ class _TrackInfoState extends State<_TrackInfo> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                       ),
-                      Text(t.artist, style: const TextStyle(color: AppColors.textSecondary)),
+                      Text(t.artist, style: TextStyle(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
                 if (_editing)
-                  TextAction(label: 'Fine', onPressed: () => _save(scope, t))
+                  TextAction(label: tr('Fine'), onPressed: () => _save(scope, t))
                 else
-                  TextAction(label: 'Modifica', onPressed: () => _startEditing(t)),
+                  TextAction(label: tr('Modifica'), onPressed: () => _startEditing(t)),
               ],
             ),
             const SizedBox(height: 16),
@@ -216,17 +217,17 @@ class _TrackInfoState extends State<_TrackInfo> {
           style: TextButton.styleFrom(foregroundColor: AppColors.accent),
           onPressed: () => _changeCover(scope, t),
           icon: const Icon(Icons.image),
-          label: const Text('Cambia copertina'),
+          label: Text(tr('Cambia copertina')),
         ),
       ),
       const SizedBox(height: 8),
-      field('title', 'Titolo'),
-      field('artist', 'Artista'),
-      field('album', 'Album'),
-      field('albumArtist', 'Artista dell\'album'),
-      field('genre', 'Genere'),
-      field('year', 'Anno', number: true),
-      field('lyrics', 'Testo', multiline: true),
+      field('title', tr('Titolo')),
+      field('artist', tr('Artista')),
+      field('album', tr('Album')),
+      field('albumArtist', tr('Artista dell\'album')),
+      field('genre', tr('Genere')),
+      field('year', tr('Anno'), number: true),
+      field('lyrics', tr('Testo'), multiline: true),
     ];
   }
 
@@ -234,11 +235,11 @@ class _TrackInfoState extends State<_TrackInfo> {
     final text = t.lyrics;
     Widget body;
     if (_searchingLyrics) {
-      body = const Row(
+      body = Row(
         children: [
-          SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-          SizedBox(width: 12),
-          Text('Cerco il testo…', style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 12),
+          Text(tr('Cerco il testo…'), style: TextStyle(color: AppColors.textSecondary)),
         ],
       );
     } else if (text != null && text.isNotEmpty) {
@@ -248,26 +249,27 @@ class _TrackInfoState extends State<_TrackInfo> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _lyricsError ?? (text == null ? 'Testo non ancora cercato.' : 'Testo non trovato (o brano strumentale).'),
-            style: const TextStyle(color: AppColors.textSecondary),
+            _lyricsError ??
+                (text == null ? tr('Testo non ancora cercato.') : tr('Testo non trovato (o brano strumentale).')),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: AppColors.accent, padding: EdgeInsets.zero),
             onPressed: _findLyrics,
-            child: const Text('Cerca di nuovo'),
+            child: Text(tr('Cerca di nuovo')),
           ),
         ],
       );
     }
     return [
       const SizedBox(height: 24),
-      const Text('TESTO', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      Text(tr('TESTO'), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
       const SizedBox(height: 10),
       body,
       if (text != null && text.isNotEmpty) ...[
         const SizedBox(height: 12),
-        const Text(
-          'Testo in lingua originale da LRCLIB o dai tag del file. Puoi correggerlo con Modifica.',
+        Text(
+          tr('Testo in lingua originale da LRCLIB o dai tag del file. Puoi correggerlo con Modifica.'),
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
       ],
@@ -276,16 +278,16 @@ class _TrackInfoState extends State<_TrackInfo> {
 
   List<Widget> _details(Track t) {
     final rows = <(String, String?)>[
-      ('Artista', t.artist.isEmpty ? null : t.artist),
-      ('Album', t.album),
-      ('Artista dell\'album', t.albumArtist),
-      ('Genere', t.genre),
-      ('Anno', t.year?.toString()),
-      ('Durata', t.duration == null ? null : formatDuration(t.duration)),
-      ('Formato', t.format.isEmpty ? null : t.format.toUpperCase()),
-      ('Dimensione', _size == null ? null : '${(_size! / (1024 * 1024)).toStringAsFixed(1)} MB'),
-      ('Aggiunto il', formatDate(t.addedAt)),
-      ('Fonte', t.sourceUrl),
+      (tr('Artista'), t.artist.isEmpty ? null : t.artist),
+      (tr('Album'), t.album),
+      (tr('Artista dell\'album'), t.albumArtist),
+      (tr('Genere'), t.genre),
+      (tr('Anno'), t.year?.toString()),
+      (tr('Durata'), t.duration == null ? null : formatDuration(t.duration)),
+      (tr('Formato'), t.format.isEmpty ? null : t.format.toUpperCase()),
+      (tr('Dimensione'), _size == null ? null : '${(_size! / (1024 * 1024)).toStringAsFixed(1)} MB'),
+      (tr('Aggiunto il'), formatDate(t.addedAt)),
+      (tr('Fonte'), t.sourceUrl),
     ];
     return [
       for (final (label, value) in rows) ...[
@@ -296,12 +298,12 @@ class _TrackInfoState extends State<_TrackInfo> {
             children: [
               SizedBox(
                 width: 140,
-                child: Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+                child: Text(label, style: TextStyle(color: AppColors.textSecondary)),
               ),
               Expanded(
                 child: SelectableText(
-                  value ?? 'Non disponibile',
-                  style: TextStyle(color: value == null ? AppColors.textSecondary : Colors.white),
+                  value ?? tr('Non disponibile'),
+                  style: TextStyle(color: value == null ? AppColors.textSecondary : AppColors.text),
                 ),
               ),
             ],
@@ -310,8 +312,8 @@ class _TrackInfoState extends State<_TrackInfo> {
         const Divider(height: 1),
       ],
       const SizedBox(height: 12),
-      const Text(
-        'I dati arrivano da YouTube tramite yt-dlp. Se qualcosa manca o è sbagliato, tocca Modifica.',
+      Text(
+        tr('I dati arrivano da YouTube tramite yt-dlp. Se qualcosa manca o è sbagliato, tocca Modifica.'),
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       ),
     ];

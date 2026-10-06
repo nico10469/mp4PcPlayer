@@ -9,6 +9,8 @@ import 'app_scope.dart';
 import 'artists_page.dart';
 import 'cover.dart';
 import 'favorites.dart';
+import 'l10n.dart';
+import 'queue_sheet.dart';
 import 'theme.dart';
 import 'track_info_sheet.dart';
 
@@ -103,7 +105,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                         child: Column(
                           children: [
                             IconButton(
-                              tooltip: 'Chiudi',
+                              tooltip: tr('Chiudi'),
                               icon: Icon(Icons.keyboard_arrow_down, size: 36, color: secondary),
                               onPressed: () => Navigator.pop(context),
                             ),
@@ -124,7 +126,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                             const SizedBox(height: 20),
                             _Controls(controller: controller, color: fg),
                             const SizedBox(height: 20),
-                            _Volume(player: controller.player, color: secondary),
+                            _Volume(controller: controller, color: secondary),
                             const SizedBox(height: 12),
                             _BottomRow(controller: controller, track: track, color: secondary, active: fg),
                             const SizedBox(height: 8),
@@ -231,21 +233,21 @@ class _Controls extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         IconButton(
-          tooltip: 'Precedente',
+          tooltip: tr('Precedente'),
           iconSize: 48,
           color: color,
           icon: const Icon(Icons.fast_rewind),
           onPressed: controller.previous,
         ),
         IconButton(
-          tooltip: controller.isPlaying ? 'Pausa' : 'Riproduci',
+          tooltip: controller.isPlaying ? tr('Pausa') : tr('Riproduci'),
           iconSize: 64,
           color: color,
           icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
           onPressed: controller.togglePlay,
         ),
         IconButton(
-          tooltip: 'Successivo',
+          tooltip: tr('Successivo'),
           iconSize: 48,
           color: color,
           icon: const Icon(Icons.fast_forward),
@@ -257,35 +259,32 @@ class _Controls extends StatelessWidget {
 }
 
 class _Volume extends StatelessWidget {
-  const _Volume({required this.player, required this.color});
+  const _Volume({required this.controller, required this.color});
 
-  final AudioPlayer player;
+  final PlayerController controller;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<double>(
-      stream: player.volumeStream,
-      builder: (context, snap) {
-        return Row(
-          children: [
-            Icon(Icons.volume_mute, size: 18, color: color),
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context)
-                    .copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10)),
-                child: Slider(value: (snap.data ?? player.volume).clamp(0, 1), onChanged: player.setVolume),
-              ),
-            ),
-            Icon(Icons.volume_up, size: 18, color: color),
-          ],
-        );
-      },
+    // Il volume scelto, non quello del player (che la dissolvenza abbassa per qualche secondo).
+    return Row(
+      children: [
+        Icon(Icons.volume_mute, size: 18, color: color),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10)),
+            child: Slider(value: controller.volume, onChanged: controller.setVolume),
+          ),
+        ),
+        Icon(Icons.volume_up, size: 18, color: color),
+      ],
     );
   }
 }
 
-/// Casuale, ripetizione e "mi piace"; a destra i tre puntini dei metadati.
+/// Casuale, ripetizione, coda, timer e "mi piace"; a destra i tre puntini dei metadati.
 class _BottomRow extends StatelessWidget {
   const _BottomRow({required this.controller, required this.track, required this.color, required this.active});
 
@@ -305,12 +304,9 @@ class _BottomRow extends StatelessWidget {
           builder: (context, snap) {
             final on = snap.data ?? false;
             return IconButton(
-              tooltip: 'Casuale',
+              tooltip: tr('Casuale'),
               icon: Icon(Icons.shuffle, color: on ? active : color.withValues(alpha: 0.5)),
-              onPressed: () async {
-                if (!on) await player.shuffle();
-                await player.setShuffleModeEnabled(!on);
-              },
+              onPressed: () => controller.setShuffle(!on),
             );
           },
         ),
@@ -320,18 +316,33 @@ class _BottomRow extends StatelessWidget {
             final mode = snap.data ?? LoopMode.off;
             const next = {LoopMode.off: LoopMode.all, LoopMode.all: LoopMode.one, LoopMode.one: LoopMode.off};
             return IconButton(
-              tooltip: 'Ripeti',
+              tooltip: tr('Ripeti'),
               icon: Icon(
                 mode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
                 color: mode == LoopMode.off ? color.withValues(alpha: 0.5) : active,
               ),
-              onPressed: () => player.setLoopMode(next[mode]!),
+              onPressed: () => controller.setLoopMode(next[mode]!),
             );
           },
         ),
+        IconButton(
+          tooltip: tr('In coda'),
+          icon: Icon(Icons.queue_music, color: active),
+          onPressed: () => showQueue(context),
+        ),
+        IconButton(
+          tooltip: controller.sleepTimer == null
+              ? tr('Timer di spegnimento')
+              : tr('Timer: {when}', {'when': sleepTimerLabel(controller.sleepTimer!)}),
+          icon: Icon(
+            controller.sleepTimer == null ? Icons.bedtime_outlined : Icons.bedtime,
+            color: controller.sleepTimer == null ? color.withValues(alpha: 0.5) : active,
+          ),
+          onPressed: () => showSleepTimer(context),
+        ),
         FavoriteButton(track: track, color: active),
         IconButton(
-          tooltip: 'Info brano',
+          tooltip: tr('Info brano'),
           icon: Icon(Icons.more_horiz, color: active, size: 30),
           onPressed: () => showTrackInfo(context, track),
         ),

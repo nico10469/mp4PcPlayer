@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -12,11 +14,15 @@ import 'settings.dart';
 import 'yt_music.dart';
 import 'ytdlp_audio.dart';
 
-enum DownloadPhase { server, transfer, done, error }
+/// [queued]: aspetta che finisca uno dei download già in corso.
+enum DownloadPhase { queued, server, transfer, done, error }
 
 class DownloadState {
   const DownloadState(this.phase, this.progress, [this.error]);
   final DownloadPhase phase;
+
+  /// In fila o in corso: toccare di nuovo "Scarica" non serve.
+  bool get isActive => phase == DownloadPhase.queued || phase == DownloadPhase.server || phase == DownloadPhase.transfer;
 
   /// Avanzamento complessivo da 0 a 1. Con il server il download sul server pesa l'80%
   /// e il trasferimento sul dispositivo il restante 20%; nell'app conta solo il trasferimento.
@@ -46,7 +52,9 @@ class DownloadManager extends ChangeNotifier {
     this._music,
     this._audio,
     this.pollInterval = const Duration(milliseconds: 700),
-  });
+    this.maxParallel = 3,
+    this.retryDelay = const Duration(seconds: 3),
+  }) : assert(maxParallel > 0);
 
   final LibraryStore library;
   final PlaylistStore? playlists;
@@ -55,6 +63,35 @@ class DownloadManager extends ChangeNotifier {
   MusicCatalog? _music;
   AudioFetcher? _audio;
   final Duration pollInterval;
+
+  /// Quanti brani si scaricano insieme: abbastanza per andare più veloci, pochi
+  /// per non far rallentare YouTube. Gli altri aspettano in fila, nell'ordine.
+  final int maxParallel;
+
+  /// Pausa prima di riprovare i brani di un album o di una playlist non riusciti.
+  final Duration retryDelay;
+
+  int _running = 0;
+  final _waiting = Queue<Completer<void>>();
+
+  Future<void> _acquire() async {
+    if (_running < maxParallel) {
+      _running++;
+      return;
+    }
+    final turn = Completer<void>();
+    _waiting.add(turn);
+    // Il posto lo passa direttamente chi finisce (vedi _release): _running non cambia.
+    await turn.future;
+  }
+
+  void _release() {
+    if (_waiting.isNotEmpty) {
+      _waiting.removeFirst().complete();
+    } else {
+      _running--;
+    }
+  }
 
   /// YouTube Music letto direttamente dall'app.
   MusicCatalog get music => _music ??= YtMusicClient();
@@ -107,10 +144,9 @@ class DownloadManager extends ChangeNotifier {
     String? album,
     String? albumArtist,
   }) async {
-    final current = _states[key];
-    if (current != null && (current.phase == DownloadPhase.server || current.phase == DownloadPhase.transfer)) {
-      return null;
-    }
+    if (_states[key]?.isActive ?? false) return null;
+    _set(key, const DownloadState(DownloadPhase.queued, 0));
+    await _acquire();
     try {
       final track = mode == DownloadMode.server
           ? await _viaServer(key, source ?? key, result, cover: cover, album: album, albumArtist: albumArtist)
@@ -121,6 +157,8 @@ class DownloadManager extends ChangeNotifier {
     } on Exception catch (e) {
       _set(key, DownloadState(DownloadPhase.error, 0, e.toString()));
       return null;
+    } finally {
+      _release();
     }
   }
 
@@ -156,6 +194,7 @@ class DownloadManager extends ChangeNotifier {
           meta['artist'] as String? ?? '',
           meta['title'] as String? ?? trackId,
           meta['ext'] as String? ?? 'm4a',
+          reserve: true,
         );
     await api.fetchFile(
       trackId,
@@ -203,7 +242,7 @@ class DownloadManager extends ChangeNotifier {
     await audio.fetch(videoId, (ext) {
       final name = existing != null && existing.format == ext
           ? existing.fileName
-          : library.newAudioName(artists.join(', '), title, ext);
+          : library.newAudioName(artists.join(', '), title, ext, reserve: true);
       written = name;
       return library.audioFileFor(name);
     }, onProgress: (p) => _set(key, DownloadState(DownloadPhase.transfer, p * 0.95)));
@@ -235,54 +274,88 @@ class DownloadManager extends ChangeNotifier {
     );
   }
 
-  /// Scarica tutti i brani di un album o di una playlist, uno dopo l'altro.
+  /// Scarica tutti i brani di un album o di una playlist, [maxParallel] alla volta.
+  /// I brani non riusciti si riprovano una volta alla fine, dopo una pausa.
   /// Una playlist diventa anche una playlist dell'app (aggiornata, se era già stata scaricata).
   Future<void> downloadCollection(Collection c) async {
     if (_collections[c.id]?.running ?? false) return;
+    // Un brano ripetuto nella playlist si scarica una volta sola.
+    final tracks = {for (final r in c.tracks) r.id: r}.values.toList();
+    final found = List<Track?>.filled(tracks.length, null);
     var done = 0;
     var failed = 0;
     void report(bool running) {
-      _collections[c.id] = CollectionProgress(done: done, failed: failed, total: c.tracks.length, running: running);
+      _collections[c.id] = CollectionProgress(done: done, failed: failed, total: tracks.length, running: running);
       notifyListeners();
     }
 
-    report(true);
-    final ids = <String>[];
-    for (final r in c.tracks) {
-      final track = library.contains(r.id)
-          ? library.byId(r.id)
-          : await download(
-              r.id,
-              result: r,
-              cover: r.thumbnail ?? c.thumbnail,
-              album: c.kind == ResultKind.album ? c.title : r.album,
-              albumArtist: c.kind == ResultKind.album && c.artist.isNotEmpty ? c.artist : null,
-            );
-      if (track != null) {
-        ids.add(track.id);
-        done++;
-      } else {
-        failed++;
-      }
-      report(true);
+    Future<bool> get(int i) async {
+      final r = tracks[i];
+      found[i] =
+          library.byId(r.id) ??
+          await download(
+            r.id,
+            result: r,
+            cover: r.thumbnail ?? c.thumbnail,
+            album: c.kind == ResultKind.album ? c.title : r.album,
+            albumArtist: c.kind == ResultKind.album && c.artist.isNotEmpty ? c.artist : null,
+          );
+      return found[i] != null;
     }
 
-    final store = playlists;
-    if (c.kind == ResultKind.playlist && store != null && ids.isNotEmpty) {
-      final existing = store.bySource(c.id);
-      if (existing != null) {
-        await store.addTracks(existing, ids);
-      } else {
-        File? cover;
-        final thumb = c.thumbnail;
-        if (thumb != null) {
-          final tmp = File('${library.dir.path}/.cover_${c.id}.jpg');
-          if (await api.fetchCover(thumb, tmp)) cover = tmp;
-        }
-        await store.create(name: c.title, description: c.artist, trackIds: ids, cover: cover, sourceId: c.id);
-        if (cover != null && await cover.exists()) await cover.delete();
+    report(true);
+    // Anche se qualcosa va storto, il pulsante "Scarica tutto" torna a funzionare.
+    try {
+      // Si mettono in fila tutti insieme: download() ne fa partire solo maxParallel alla volta.
+      await Future.wait([
+        for (var i = 0; i < tracks.length; i++)
+          get(i).then((ok) {
+            ok ? done++ : failed++;
+            report(true);
+          }),
+      ]);
+
+      // Spesso è stata la connessione, o YouTube che ha rallentato per un attimo.
+      final retry = [
+        for (var i = 0; i < tracks.length; i++)
+          if (found[i] == null) i,
+      ];
+      if (retry.isNotEmpty) {
+        await Future<void>.delayed(retryDelay);
+        await Future.wait([
+          for (final i in retry)
+            get(i).then((ok) {
+              if (!ok) return;
+              done++;
+              failed--;
+              report(true);
+            }),
+        ]);
       }
+
+      // Nella playlist dell'app i brani restano nell'ordine originale, anche se sono finiti in disordine.
+      final ids = [
+        for (final t in found)
+          if (t != null) t.id,
+      ];
+      final store = playlists;
+      if (c.kind == ResultKind.playlist && store != null && ids.isNotEmpty) {
+        final existing = store.bySource(c.id);
+        if (existing != null) {
+          await store.addTracks(existing, ids);
+        } else {
+          File? cover;
+          final thumb = c.thumbnail;
+          if (thumb != null) {
+            final tmp = File('${library.dir.path}/.cover_${c.id}.jpg');
+            if (await api.fetchCover(thumb, tmp)) cover = tmp;
+          }
+          await store.create(name: c.title, description: c.artist, trackIds: ids, cover: cover, sourceId: c.id);
+          if (cover != null && await cover.exists()) await cover.delete();
+        }
+      }
+    } finally {
+      report(false);
     }
-    report(false);
   }
 }

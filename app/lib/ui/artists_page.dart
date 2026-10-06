@@ -5,17 +5,18 @@ import '../services/music_catalog.dart';
 import 'app_scope.dart';
 import 'cover.dart';
 import 'download_page.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'track_tile.dart';
 import 'widgets.dart';
 
-const unknownArtist = 'Artista sconosciuto';
-const unknownAlbum = 'Album sconosciuto';
+String get unknownArtist => tr('Artista sconosciuto');
+String get unknownAlbum => tr('Album sconosciuto');
 
 /// Gli artisti con cui il brano compare nella sezione Artisti (principali e ospiti).
 List<String> artistsOf(Track t) {
   final names = t.artistNames;
-  return names.isEmpty ? const [unknownArtist] : names;
+  return names.isEmpty ? [unknownArtist] : names;
 }
 
 String albumOf(Track t) => (t.album ?? '').trim().isEmpty ? unknownAlbum : t.album!.trim();
@@ -42,15 +43,15 @@ class ArtistsPage extends StatelessWidget {
         }
         final names = byArtist.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         return LargeTitlePage(
-          title: 'Artisti',
-          backLabel: 'Libreria',
+          title: tr('Artisti'),
+          backLabel: tr('Libreria'),
           slivers: [
             if (names.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyState(
-                  title: 'Nessun artista',
-                  message: 'Gli artisti dei brani che scarichi compaiono qui.',
+                  title: tr('Nessun artista'),
+                  message: tr('Gli artisti dei brani che scarichi compaiono qui.'),
                 ),
               )
             else
@@ -169,21 +170,21 @@ class _ArtistPageState extends State<ArtistPage> {
 
         return LargeTitlePage(
           title: name,
-          backLabel: 'Artisti',
+          backLabel: tr('Artisti'),
           actions: [
             PopupMenuButton<_AlbumSort>(
               initialValue: _sort,
               color: AppColors.surfaceHigh,
               onSelected: (s) => setState(() => _sort = s),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: _AlbumSort.name, child: Text('Titolo')),
-                PopupMenuItem(value: _AlbumSort.year, child: Text('Anno di uscita')),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: _AlbumSort.name, child: Text(tr('Titolo'))),
+                PopupMenuItem(value: _AlbumSort.year, child: Text(tr('Anno di uscita'))),
               ],
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
-                  'Ordina',
-                  style: TextStyle(color: AppColors.accent, fontSize: 17, fontWeight: FontWeight.w700),
+                  tr('Ordina'),
+                  style: const TextStyle(color: AppColors.accent, fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -199,7 +200,7 @@ class _ArtistPageState extends State<ArtistPage> {
               ),
             ),
             if (top.isNotEmpty) ...[
-              const SliverToBoxAdapter(child: SectionTitle('I più ascoltati')),
+              SliverToBoxAdapter(child: SectionTitle(tr('I più ascoltati'))),
               SliverList.list(
                 children: [
                   for (var i = 0; i < top.length && i < 5; i++)
@@ -223,7 +224,7 @@ class _ArtistPageState extends State<ArtistPage> {
                   slivers: [
                     SliverToBoxAdapter(
                       child: SectionTitle(
-                        'Album',
+                        tr('Album'),
                         trailing: loading
                             ? const Padding(
                                 padding: EdgeInsets.only(right: 8),
@@ -233,18 +234,20 @@ class _ArtistPageState extends State<ArtistPage> {
                       ),
                     ),
                     if (snap.hasError)
-                      const SliverToBoxAdapter(
+                      SliverToBoxAdapter(
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                           child: Text(
-                            'Non riesco a leggere la discografia completa adesso: ecco gli album che hai in libreria.',
+                            tr(
+                              'Non riesco a leggere la discografia completa adesso: ecco gli album che hai in libreria.',
+                            ),
                             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                           ),
                         ),
                       ),
                     _AlbumGrid(artist: name, albums: albums),
                     if (singles.isNotEmpty) ...[
-                      const SliverToBoxAdapter(child: SectionTitle('Singoli ed EP')),
+                      SliverToBoxAdapter(child: SectionTitle(tr('Singoli ed EP'))),
                       _AlbumGrid(artist: name, albums: _albums(const [], singles), placeholder: Icons.music_note),
                     ],
                   ],
@@ -299,7 +302,7 @@ class _TopTrackTile extends StatelessWidget {
                     albumOf(track),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -309,8 +312,8 @@ class _TopTrackTile extends StatelessWidget {
               children: [
                 Text('$plays', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 Text(
-                  plays == 1 ? 'riproduzione' : 'riproduzioni',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  plays == 1 ? tr('riproduzione') : tr('riproduzioni'),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                 ),
               ],
             ),
@@ -334,10 +337,10 @@ class _AlbumGrid extends StatelessWidget {
     final scope = AppScope.of(context);
     final wide = MediaQuery.sizeOf(context).width;
     if (albums.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Text('Nessun album', style: TextStyle(color: AppColors.textSecondary)),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text(tr('Nessun album'), style: TextStyle(color: AppColors.textSecondary)),
         ),
       );
     }
@@ -356,7 +359,7 @@ class _AlbumGrid extends StatelessWidget {
           final first = a.local.firstOrNull;
           final details = [
             if (a.year != null) '${a.year}',
-            if (a.local.isNotEmpty) 'In libreria' else if (a.type != null && a.type != 'Album') a.type!,
+            if (a.local.isNotEmpty) tr('In libreria') else if (a.type != null && a.type != 'Album') a.type!,
           ];
           return LayoutBuilder(
             builder: (context, c) => CarouselItem(

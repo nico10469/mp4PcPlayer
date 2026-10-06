@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/track.dart';
 import 'app_scope.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'track_tile.dart';
 import 'widgets.dart';
@@ -27,7 +28,7 @@ class FavoritesCover extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: Icon(Icons.favorite, color: AppColors.favorite, size: size * 0.5, semanticLabel: 'Preferiti'),
+      child: Icon(Icons.favorite, color: AppColors.favorite, size: size * 0.5, semanticLabel: tr('Preferiti')),
     );
   }
 }
@@ -67,7 +68,7 @@ class FavoritesPage extends StatelessWidget {
                     children: [
                       const FavoritesCover(size: 220, radius: 10),
                       const SizedBox(height: 20),
-                      const Text('Preferiti', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+                      Text(tr('Preferiti'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 20),
                       PlayShuffleRow(
                         onPlay: tracks.isEmpty ? null : () => scope.player.playQueue(tracks),
@@ -79,10 +80,10 @@ class FavoritesPage extends StatelessWidget {
               ),
               const SliverToBoxAdapter(child: Divider(height: 1, indent: 16)),
               if (tracks.isEmpty)
-                const SliverToBoxAdapter(
+                SliverToBoxAdapter(
                   child: EmptyState(
-                    title: 'Ancora nessun preferito',
-                    message: 'Tocca il cuore mentre ascolti un brano, o scegli "Mi piace" dal menu "…".',
+                    title: tr('Ancora nessun preferito'),
+                    message: tr('Tocca il cuore mentre ascolti un brano, o scegli "Mi piace" dal menu "…".'),
                   ),
                 )
               else ...[
@@ -112,10 +113,12 @@ class FavoritesPage extends StatelessWidget {
 
 /// Il cuore del "mi piace": pieno e viola quando il brano è tra i preferiti.
 class FavoriteButton extends StatelessWidget {
-  const FavoriteButton({super.key, required this.track, this.color = Colors.white, this.size = 26});
+  const FavoriteButton({super.key, required this.track, this.color, this.size = 26});
 
   final Track track;
-  final Color color;
+
+  /// Il colore del cuore vuoto (di solito quello del testo).
+  final Color? color;
   final double size;
 
   @override
@@ -126,9 +129,12 @@ class FavoriteButton extends StatelessWidget {
       builder: (context, _) {
         final on = scope.playlists.isFavorite(track);
         return IconButton(
-          tooltip: on ? 'Non mi piace più' : 'Mi piace',
+          tooltip: on ? tr('Non mi piace più') : tr('Mi piace'),
           iconSize: size,
-          icon: Icon(on ? Icons.favorite : Icons.favorite_border, color: on ? AppColors.favoriteOnDark : color),
+          icon: Icon(
+            on ? Icons.favorite : Icons.favorite_border,
+            color: on ? AppColors.favoriteHeart : (color ?? AppColors.text),
+          ),
           onPressed: () => scope.playlists.toggleFavorite(track),
         );
       },

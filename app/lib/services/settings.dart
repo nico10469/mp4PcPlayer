@@ -6,6 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Dove si scarica la musica: direttamente nell'app o tramite il server yt-dlp.
 enum DownloadMode { device, server }
 
+/// Tema dell'app: scuro (come il mockup), chiaro, o come il sistema.
+enum ThemeChoice { dark, light, system }
+
+/// Lingua dell'interfaccia. "Come il sistema" vuol dire italiano se il dispositivo è in italiano,
+/// altrimenti inglese. Se non si sceglie niente resta l'italiano, come nelle versioni di prima.
+enum LanguageChoice { system, italian, english }
+
 /// Impostazioni salvate sul dispositivo: server yt-dlp e cartella della musica.
 class Settings extends ChangeNotifier {
   Settings(this._prefs);
@@ -16,6 +23,23 @@ class Settings extends ChangeNotifier {
   static const _tokenKey = 'server_token';
   static const _musicDirKey = 'music_dir';
   static const _modeKey = 'download_mode';
+  static const _themeKey = 'theme';
+  static const _languageKey = 'language';
+
+  ThemeChoice get theme => ThemeChoice.values.where((t) => t.name == _prefs.getString(_themeKey)).firstOrNull ?? ThemeChoice.dark;
+
+  Future<void> setTheme(ThemeChoice theme) async {
+    await _prefs.setString(_themeKey, theme.name);
+    notifyListeners();
+  }
+
+  LanguageChoice get language =>
+      LanguageChoice.values.where((l) => l.name == _prefs.getString(_languageKey)).firstOrNull ?? LanguageChoice.italian;
+
+  Future<void> setLanguage(LanguageChoice language) async {
+    await _prefs.setString(_languageKey, language.name);
+    notifyListeners();
+  }
 
   /// Su telefono si scarica nell'app; su PC c'è già il server (l'installer Windows lo include).
   static DownloadMode get defaultMode =>

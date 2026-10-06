@@ -9,6 +9,8 @@ import '../services/settings.dart';
 import '../services/storage_access.dart';
 import '../services/ytdlp_audio.dart';
 import 'app_scope.dart';
+import 'l10n.dart';
+import 'playback_settings.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -56,7 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final version = await scope.downloads.api.health();
       setState(() {
         _ok = true;
-        _status = 'Connesso. yt-dlp $version';
+        _status = tr('Connesso. yt-dlp {version}', {'version': version});
       });
     } on ServerException catch (e) {
       setState(() {
@@ -79,8 +81,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!await requestStorageAccess()) {
       if (!mounted) return;
       _snack(
-        'Senza il permesso di accedere ai file non posso usare le cartelle del telefono.',
-        action: SnackBarAction(label: 'Impostazioni', onPressed: openStorageSettings),
+        tr('Senza il permesso di accedere ai file non posso usare le cartelle del telefono.'),
+        action: SnackBarAction(label: tr('Impostazioni'), onPressed: openStorageSettings),
       );
       return;
     }
@@ -89,7 +91,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // Su iPhone le app vedono solo le proprie cartelle: si usa quella visibile nell'app File.
       path = '${(await getApplicationDocumentsDirectory()).path}/Musica';
     } else {
-      path = await FilePicker.getDirectoryPath(dialogTitle: 'Cartella della musica');
+      path = await FilePicker.getDirectoryPath(dialogTitle: tr('Cartella della musica'));
     }
     if (path == null) return;
     await _moveTo(Directory(path), custom: path);
@@ -104,13 +106,13 @@ class _SettingsPageState extends State<SettingsPage> {
       final imported = await scope.library.importFolder();
       _snack(
         [
-          'Cartella aggiornata',
-          if (moved > 0) moved == 1 ? '1 brano spostato' : '$moved brani spostati',
-          if (imported > 0) imported == 1 ? '1 brano trovato' : '$imported brani trovati',
+          tr('Cartella aggiornata'),
+          if (moved > 0) plural(moved, '1 brano spostato', '{n} brani spostati'),
+          if (imported > 0) plural(imported, '1 brano trovato', '{n} brani trovati'),
         ].join(' · '),
       );
     } on FileSystemException catch (e) {
-      _snack('Non riesco a usare questa cartella: ${e.osError?.message ?? e.message}');
+      _snack(tr('Non riesco a usare questa cartella: {error}', {'error': e.osError?.message ?? e.message}));
     } finally {
       if (mounted) setState(() => _moving = false);
     }
@@ -122,7 +124,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final n = await scope.library.importFolder().catchError((_) => 0);
     if (!mounted) return;
     setState(() => _moving = false);
-    _snack(n == 0 ? 'Nessun brano nuovo nella cartella' : (n == 1 ? '1 brano aggiunto' : '$n brani aggiunti'));
+    _snack(n == 0 ? tr('Nessun brano nuovo nella cartella') : plural(n, '1 brano aggiunto', '{n} brani aggiunti'));
   }
 
   Widget _folderSection() {
@@ -131,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('CARTELLA DELLA MUSICA', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(tr('CARTELLA DELLA MUSICA'), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
@@ -144,10 +146,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(custom ? 'Cartella scelta da te' : 'Cartella dell\'app'),
+                    Text(custom ? tr('Cartella scelta da te') : tr('Cartella dell\'app')),
                     SelectableText(
                       library.musicDir.path,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -161,27 +163,29 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: const Icon(Icons.drive_folder_upload),
           label: Text(
             _moving
-                ? 'Sposto i brani…'
+                ? tr('Sposto i brani…')
                 : Platform.isIOS
-                ? 'Mostra i brani nell\'app File'
-                : 'Scegli la cartella',
+                ? tr('Mostra i brani nell\'app File')
+                : tr('Scegli la cartella'),
           ),
         ),
         Row(
           children: [
-            TextButton(onPressed: _moving ? null : _rescan, child: const Text('Cerca brani nuovi')),
+            TextButton(onPressed: _moving ? null : _rescan, child: Text(tr('Cerca brani nuovi'))),
             const Spacer(),
             if (custom)
               TextButton(
                 onPressed: _moving ? null : () => _moveTo(library.dir),
-                child: const Text('Usa quella dell\'app'),
+                child: Text(tr('Usa quella dell\'app')),
               ),
           ],
         ),
-        const Text(
-          'I brani scaricati vengono salvati qui. Scegliendo una cartella nuova ci sposto i brani che hai già, '
-          'e aggiungo alla libreria i file audio che ci trovi dentro. Sul telefono ti chiedo prima il permesso '
-          'di accedere ai file.',
+        Text(
+          tr(
+            'I brani scaricati vengono salvati qui. Scegliendo una cartella nuova ci sposto i brani che hai già, '
+            'e aggiungo alla libreria i file audio che ci trovi dentro. Sul telefono ti chiedo prima il permesso '
+            'di accedere ai file.',
+          ),
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
       ],
@@ -194,19 +198,18 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('DOWNLOAD', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(tr('DOWNLOAD'), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         const SizedBox(height: 8),
         SegmentedButton<DownloadMode>(
           showSelectedIcon: false,
-          style: SegmentedButton.styleFrom(
-            selectedBackgroundColor: AppColors.accent,
-            selectedForegroundColor: Colors.white,
-            foregroundColor: Colors.white,
-            side: const BorderSide(color: AppColors.divider),
-          ),
-          segments: const [
-            ButtonSegment(value: DownloadMode.device, label: Text('Nell\'app'), icon: Icon(Icons.phone_iphone)),
-            ButtonSegment(value: DownloadMode.server, label: Text('Con il server'), icon: Icon(Icons.dns)),
+          style: _segmentStyle(),
+          segments: [
+            ButtonSegment(
+              value: DownloadMode.device,
+              label: Text(tr('Nell\'app')),
+              icon: const Icon(Icons.phone_iphone),
+            ),
+            ButtonSegment(value: DownloadMode.server, label: Text(tr('Con il server')), icon: const Icon(Icons.dns)),
           ],
           selected: {mode},
           onSelectionChanged: (s) => settings.setDownloadMode(s.first),
@@ -214,15 +217,19 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         Text(
           mode == DownloadMode.server
-              ? 'Il server scarica con yt-dlp e manda i brani all\'app. Si aggiorna senza cambiare l\'app.'
+              ? tr('Il server scarica con yt-dlp e manda i brani all\'app. Si aggiorna senza cambiare l\'app.')
               : YtDlp.available
-              ? 'La musica si cerca su YouTube Music e si scarica su questo telefono con yt-dlp, lo stesso '
-                    'programma del server, senza bisogno del server. Se YouTube cambia qualcosa e i download '
-                    'smettono di funzionare, aggiorna il motore qui sotto.'
-              : 'La musica si cerca su YouTube Music e si scarica direttamente su questo dispositivo, '
-                    'senza bisogno del server. Se un giorno YouTube cambia qualcosa e i download smettono '
-                    'di funzionare, aggiorna l\'app o usa il server.',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ? tr(
+                  'La musica si cerca su YouTube Music e si scarica su questo telefono con yt-dlp, lo stesso '
+                  'programma del server, senza bisogno del server. Se YouTube cambia qualcosa e i download '
+                  'smettono di funzionare, aggiorna il motore qui sotto.',
+                )
+              : tr(
+                  'La musica si cerca su YouTube Music e si scarica direttamente su questo dispositivo, '
+                  'senza bisogno del server. Se un giorno YouTube cambia qualcosa e i download smettono '
+                  'di funzionare, aggiorna l\'app o usa il server.',
+                ),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         if (mode == DownloadMode.device && YtDlp.available) ...[const SizedBox(height: 12), const EngineTile()],
         if (mode == DownloadMode.server) ...[
@@ -231,19 +238,19 @@ class _SettingsPageState extends State<SettingsPage> {
             controller: _url,
             keyboardType: TextInputType.url,
             autocorrect: false,
-            decoration: const InputDecoration(labelText: 'Indirizzo', hintText: 'http://IP-DEL-PC:8000'),
+            decoration: InputDecoration(labelText: tr('Indirizzo'), hintText: tr('http://IP-DEL-PC:8000')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _token,
             obscureText: true,
             autocorrect: false,
-            decoration: const InputDecoration(labelText: 'Token (facoltativo)'),
+            decoration: InputDecoration(labelText: tr('Token (facoltativo)')),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _testing ? null : _saveAndTest,
-            child: Text(_testing ? 'Verifica in corso…' : 'Salva e prova la connessione'),
+            child: Text(_testing ? tr('Verifica in corso…') : tr('Salva e prova la connessione')),
           ),
           if (_status != null) ...[
             const SizedBox(height: 12),
@@ -259,9 +266,11 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
           const SizedBox(height: 24),
-          const Text(
-            'Il server è il programma Python nella cartella "server" del progetto: tienilo acceso su un PC '
-            'o un Raspberry Pi. I brani già scaricati si ascoltano anche senza server.',
+          Text(
+            tr(
+              'Il server è il programma Python nella cartella "server" del progetto: tienilo acceso su un PC '
+              'o un Raspberry Pi. I brani già scaricati si ascoltano anche senza server.',
+            ),
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
         ],
@@ -269,11 +278,58 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// Tema e lingua.
+  Widget _appearanceSection() {
+    final settings = AppScope.of(context).settings;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(tr('ASPETTO'), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        const SizedBox(height: 8),
+        SegmentedButton<ThemeChoice>(
+          showSelectedIcon: false,
+          style: _segmentStyle(),
+          segments: [
+            ButtonSegment(value: ThemeChoice.dark, label: Text(tr('Scuro')), icon: const Icon(Icons.dark_mode)),
+            ButtonSegment(value: ThemeChoice.light, label: Text(tr('Chiaro')), icon: const Icon(Icons.light_mode)),
+            ButtonSegment(
+              value: ThemeChoice.system,
+              label: Text(tr('Sistema')),
+              icon: const Icon(Icons.brightness_auto),
+            ),
+          ],
+          selected: {settings.theme},
+          onSelectionChanged: (s) => settings.setTheme(s.first),
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<LanguageChoice>(
+          showSelectedIcon: false,
+          style: _segmentStyle(),
+          segments: [
+            ButtonSegment(value: LanguageChoice.system, label: Text(tr('Sistema')), icon: const Icon(Icons.language)),
+            // I nomi delle lingue restano nella loro lingua, così si ritrovano sempre.
+            const ButtonSegment(value: LanguageChoice.italian, label: Text('Italiano')),
+            const ButtonSegment(value: LanguageChoice.english, label: Text('English')),
+          ],
+          selected: {settings.language},
+          onSelectionChanged: (s) => settings.setLanguage(s.first),
+        ),
+      ],
+    );
+  }
+
+  ButtonStyle _segmentStyle() => SegmentedButton.styleFrom(
+    selectedBackgroundColor: AppColors.accent,
+    selectedForegroundColor: Colors.white,
+    foregroundColor: AppColors.text,
+    side: BorderSide(color: AppColors.divider),
+  );
+
   @override
   Widget build(BuildContext context) {
     return LargeTitlePage(
-      title: 'Impostazioni',
-      backLabel: 'Libreria',
+      title: tr('Impostazioni'),
+      backLabel: tr('Libreria'),
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.all(16),
@@ -282,6 +338,13 @@ class _SettingsPageState extends State<SettingsPage> {
               ListenableBuilder(listenable: AppScope.of(context).library, builder: (context, _) => _folderSection()),
               const SizedBox(height: 32),
               ListenableBuilder(listenable: AppScope.of(context).settings, builder: (context, _) => _downloadSection()),
+              const SizedBox(height: 32),
+              const PlaybackSection(),
+              const SizedBox(height: 32),
+              ListenableBuilder(
+                listenable: AppScope.of(context).settings,
+                builder: (context, _) => _appearanceSection(),
+              ),
               const SizedBox(height: 40),
               const Center(child: AppLogo(size: 96)),
               const SizedBox(height: 8),
@@ -320,7 +383,7 @@ class _EngineTileState extends State<EngineTile> {
         if (mounted) setState(() => _version = v);
       },
       onError: (Object e) {
-        if (mounted) setState(() => _message = 'Il motore non si è avviato: $e');
+        if (mounted) setState(() => _message = tr('Il motore non si è avviato: {error}', {'error': e}));
       },
     );
   }
@@ -334,9 +397,11 @@ class _EngineTileState extends State<EngineTile> {
     try {
       final r = await _ytDlp.update();
       _version = r.version ?? _version;
-      message = r.updated ? 'Aggiornato a ${r.version ?? 'una nuova versione'}' : 'È già l\'ultima versione';
+      message = r.updated
+          ? tr('Aggiornato a {version}', {'version': r.version ?? tr('una nuova versione')})
+          : tr('È già l\'ultima versione');
     } catch (e) {
-      message = 'Aggiornamento non riuscito: $e';
+      message = tr('Aggiornamento non riuscito: {error}', {'error': e});
     }
     if (!mounted) return;
     setState(() {
@@ -352,14 +417,14 @@ class _EngineTileState extends State<EngineTile> {
       children: [
         Row(
           children: [
-            const Icon(Icons.memory, color: AppColors.textSecondary),
+            Icon(Icons.memory, color: AppColors.textSecondary),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Motore download'),
-                  Text(_version ?? 'yt-dlp', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Text(tr('Motore download')),
+                  Text(_version ?? 'yt-dlp', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 ],
               ),
             ),
@@ -371,11 +436,11 @@ class _EngineTileState extends State<EngineTile> {
           icon: _busy
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.system_update_alt),
-          label: Text(_busy ? 'Aggiornamento in corso…' : 'Aggiorna motore download'),
+          label: Text(_busy ? tr('Aggiornamento in corso…') : tr('Aggiorna motore download')),
         ),
         if (_message != null) ...[
           const SizedBox(height: 8),
-          Text(_message!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text(_message!, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         ],
       ],
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_scope.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'track_tile.dart';
 import 'widgets.dart';
@@ -28,13 +29,13 @@ class _SongsPageState extends State<SongsPage> {
             ? all
             : all.where((t) => t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q)).toList();
         return LargeTitlePage(
-          title: 'Brani',
-          backLabel: 'Libreria',
+          title: tr('Brani'),
+          backLabel: tr('Libreria'),
           slivers: [
             if (all.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
-                child: EmptyState(title: 'Nessun brano', message: 'I brani che scarichi compaiono qui.'),
+                child: EmptyState(title: tr('Nessun brano'), message: tr('I brani che scarichi compaiono qui.')),
               )
             else ...[
               SliverToBoxAdapter(
@@ -43,8 +44,8 @@ class _SongsPageState extends State<SongsPage> {
                   child: Column(
                     children: [
                       TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Cerca nei brani',
+                        decoration: InputDecoration(
+                          hintText: tr('Cerca nei brani'),
                           prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                         ),
                         onChanged: (v) => setState(() => _filter = v),
